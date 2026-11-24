@@ -63,9 +63,10 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         <div className="container-x grid items-center gap-14 pb-24 pt-14 sm:pt-20 lg:grid-cols-[1.15fr_1fr] lg:pb-28">
           <div>
             {settings.partnerLogo && (
-              <div className="fade-up mb-6 inline-flex items-center gap-3 rounded-2xl bg-white/95 px-3 py-2 shadow-lg sm:hidden">
-                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={46} height={32} className="h-8 w-auto" />
-                <span className="text-xs font-semibold text-[#353a98]">{t.home.partnerName}</span>
+              <div className="fade-up group mb-8 inline-flex items-center gap-4 rounded-2xl bg-white px-4 py-3 shadow-xl ring-1 ring-white/30 transition hover:-translate-y-0.5 hover:shadow-2xl sm:px-5">
+                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={114} height={80} priority className="h-12 w-auto transition-transform duration-300 group-hover:scale-105 sm:h-16" />
+                <span className="h-10 w-px bg-line sm:h-12" aria-hidden="true" />
+                <span className="text-sm font-bold leading-snug text-[#353a98] sm:text-base">{t.home.partnerName}</span>
               </div>
             )}
             <p className="eyebrow fade-up text-gold">{t.home.eyebrow}</p>
