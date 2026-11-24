@@ -53,7 +53,7 @@ export default async function About({ params }: { params: Promise<{ locale: stri
             </div>
           </Reveal>
           <div>
-            <SectionHeading eyebrow={t.about.bioTitle} title={locale === "ar" ? "ضوء زين العابدين" : "Daw Zainelabideen"} />
+            <SectionHeading eyebrow={t.about.bioTitle} title={locale === "ar" ? "ضو زين العابدين" : "Daw Zainelabideen"} />
             <div className="prose-site mt-6">
               {t.about.bio.map((p, i) => (
                 <Reveal key={i} delay={i * 0.05}>

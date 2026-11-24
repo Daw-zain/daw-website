@@ -239,7 +239,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
       <section className="py-24">
         <div className="container-x grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <SectionHeading eyebrow={t.nav.about} title={locale === "ar" ? "ضوء زين العابدين" : "Daw Zainelabideen"} text={t.about.intro} />
+            <SectionHeading eyebrow={t.nav.about} title={locale === "ar" ? "ضو زين العابدين" : "Daw Zainelabideen"} text={t.about.intro} />
             <Reveal delay={0.1}>
               <p className="lead mt-5">{t.about.bio[1]}</p>
               <div className="mt-8 flex flex-wrap gap-3">

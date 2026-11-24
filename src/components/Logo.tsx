@@ -44,7 +44,7 @@ export function Logo({ locale, light = false, className }: { locale: "ar" | "en"
           Daw <span className={light ? "text-gold" : "text-brand"}>Zainelabideen</span>
         </span>
         <span className={cn("mt-1 truncate text-[11px] font-medium max-[440px]:hidden sm:max-lg:hidden", light ? "text-white/65" : "text-slate")}>
-          {locale === "ar" ? "ضوء زين العابدين · إدارة المشروعات" : "Project Management Training & Consulting"}
+          {locale === "ar" ? "ضو زين العابدين · إدارة المشروعات" : "Project Management Training & Consulting"}
         </span>
       </span>
     </span>

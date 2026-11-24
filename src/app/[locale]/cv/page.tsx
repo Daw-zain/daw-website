@@ -32,7 +32,7 @@ export default async function CV({ params }: { params: Promise<{ locale: string 
         <article className="rounded-2xl bg-white p-5 shadow-card sm:p-10 print:rounded-none print:p-0 print:shadow-none">
           <header className="flex items-start justify-between gap-4 border-b-4 border-gold pb-6 sm:gap-6">
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold text-navy sm:text-3xl">{locale === "ar" ? "ضوء زين العابدين" : "Daw Zainelabideen"}</h1>
+              <h1 className="text-2xl font-bold text-navy sm:text-3xl">{locale === "ar" ? "ضو زين العابدين" : "Daw Zainelabideen"}</h1>
               <p className="mt-1 text-lg text-brand">{t.meta.tagline}</p>
               <p className="mt-1 text-sm text-slate" dir="ltr">
                 PMP® · PMI-RMP® · PMI-ACP®
