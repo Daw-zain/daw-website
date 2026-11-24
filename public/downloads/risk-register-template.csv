@@ -1,0 +1,6 @@
+ID,Risk description (Because of... / may occur... / leading to...),Category,Probability (1-5),Impact (1-5),Score (P x I),Priority (High/Medium/Low),Owner,Response strategy (Avoid/Transfer/Mitigate/Accept),Response actions,Trigger / early warning,Status (Open/Closed),Last review date
+R-001,"Because of [cause], [risk event] may occur, leading to [effect on objectives]",Technical,3,4,12,High,[Name],Mitigate,[Actions],[Trigger],Open,YYYY-MM-DD
+R-002,,,,,,,,,,,,
+R-003,,,,,,,,,,,,
+R-004,,,,,,,,,,,,
+R-005,,,,,,,,,,,,

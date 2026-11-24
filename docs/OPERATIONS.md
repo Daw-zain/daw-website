@@ -1,0 +1,127 @@
+# Operations: deployment, email, backups & security
+
+## 1. Environment variables
+
+Copy `.env.example` to `.env` and set:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `DATABASE_URL` | ✔ | SQLite locally (`file:./dev.db`), PostgreSQL in production |
+| `SITE_URL` | ✔ | Public URL without trailing slash, e.g. `https://dawzainelabideen.com` — used for canonical URLs, sitemap and email links |
+| `AUTH_SECRET` | ✔ | Random string ≥ 32 chars. Changing it signs everyone out |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | first run | First admin account, created by the seed if missing (password ≥ 10 chars) |
+| `SMTP_*`, `MAIL_FROM` | recommended | Without SMTP, notifications are still stored in the dashboard and printed in the server log |
+| `ADMIN_NOTIFY_EMAIL` | optional | Fallback recipient for request notifications (can be set in Admin → Settings) |
+| `NEXT_PUBLIC_GA_ID` | optional | Google Analytics 4 ID (IP anonymization on). Leave empty for no analytics |
+
+## 2. Production deployment
+
+The site stores uploaded files on disk (`storage/`), so the recommended hosting is a **VPS or a container platform with a persistent volume** (e.g. a Linux VPS with Nginx, Railway/Render/Fly.io with a volume). Serverless hosting (e.g. Vercel) would require moving uploads to object storage (S3/R2/Blob) — replace the helpers in `src/lib/storage.ts`.
+
+### Steps (Linux VPS example)
+
+```bash
+# 1. PostgreSQL database
+sudo -u postgres createuser daw --pwprompt
+sudo -u postgres createdb daw_site -O daw
+
+# 2. App
+git clone <repo> /var/www/daw-site && cd /var/www/daw-site
+npm ci
+cp .env.example .env   # set DATABASE_URL=postgresql://daw:PASS@localhost:5432/daw_site, SITE_URL, AUTH_SECRET, SMTP…
+npm run db:use-postgres
+npx prisma db push
+npm run db:seed
+npm run build
+
+# 3. Run with a process manager
+npm i -g pm2
+pm2 start "npm run start" --name daw-site
+pm2 save && pm2 startup
+```
+
+Put Nginx (or Caddy) in front for **HTTPS** (e.g. Let's Encrypt / certbot) and proxy to `localhost:3000`. Set `client_max_body_size 15m;` in Nginx so attachments up to 10 MB can be uploaded. Forward the client IP (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`) so rate limiting works per visitor.
+
+### Updating
+
+```bash
+git pull && npm ci && npx prisma db push && npm run build && pm2 restart daw-site
+```
+
+## 3. Email (SMTP)
+
+Any SMTP provider works (Google Workspace, Microsoft 365, Zoho, Brevo, Mailgun, Amazon SES…).
+
+```
+SMTP_HOST="smtp.example.com"
+SMTP_PORT="587"
+SMTP_SECURE="false"        # "true" for port 465
+SMTP_USER="no-reply@yourdomain.com"
+SMTP_PASSWORD="…"
+MAIL_FROM="Daw Zainelabideen <no-reply@yourdomain.com>"
+```
+
+**Current setup (aldaleel.ly, cPanel hosting):** `SMTP_HOST="mail.aldaleel.ly"`, `SMTP_PORT="465"`, `SMTP_SECURE="true"`, `SMTP_USER="training@aldaleel.ly"` — only `SMTP_PASSWORD` must be filled in (the mailbox password from cPanel → Email Accounts).
+
+**Test it:**
+- Command line: `npm run mail:test -- someone@example.com` (verifies login, then sends a test message).
+- Dashboard: **Admin → Site settings → Email (SMTP) → Send test** (shows the exact error if something is wrong).
+- Restart the site after any `.env` change.
+
+Configure SPF/DKIM for your domain with your provider so emails aren't marked as spam. Emails sent: admin notification for every request, registration acknowledgement to the participant, newsletter confirmation (double opt-in).
+
+## 4. Backups & restore
+
+**Daily automatic backup** (database incl. password hashes + uploaded files, keeps the latest 30):
+
+```bash
+# crontab -e   (02:00 every day)
+0 2 * * * cd /var/www/daw-site && npm run backup >> backups/backup.log 2>&1
+```
+
+On Windows use Task Scheduler to run `npm run backup` in the project folder.
+
+Copy the `backups/` folder off the server regularly (e.g. rclone to cloud storage). For PostgreSQL you can additionally use `pg_dump daw_site > daw_site.sql`.
+
+**Restore plan**
+
+1. Stop the app (`pm2 stop daw-site`).
+2. Make a fresh backup of the current state (`npm run backup`).
+3. Restore: `npm run restore -- backups/<timestamp> --yes` (restores database + `storage/` files).
+4. Start the app (`pm2 start daw-site`) and sign in to verify.
+
+The JSON file downloaded from **Admin → Backup** excludes password hashes; after restoring from it, re-create passwords (`npm run db:seed` recreates the admin defined in `.env` if missing, or reset users from the dashboard).
+
+## 5. Security checklist
+
+- [x] HTTPS (via reverse proxy) + HSTS header
+- [x] Passwords hashed with bcrypt (cost 12); sessions are signed JWTs in httpOnly, SameSite=Lax cookies (Secure in production)
+- [x] Admin routes protected in middleware **and** every server action re-checks the role against the database
+- [x] Login rate limiting (8 attempts / 15 min per IP) and failed logins logged
+- [x] Forms: zod validation, honeypot field, minimum fill time, per-IP rate limit, consent checkbox
+- [x] Uploads: allow-list of types, magic-byte sniffing, size limits, random filenames; request attachments stored privately and served only to staff
+- [x] Markdown sanitized before rendering; JSON-LD escaped
+- [x] Security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- [x] Audit log of admin activity
+- [ ] Change the seeded admin password after first login
+- [ ] If running several app instances behind a load balancer, move the in-memory rate limiter (`src/lib/spam.ts`) to Redis
+
+## 6. Basic acceptance tests performed
+
+- All public routes return 200 in Arabic and English; unknown routes return 404
+- Registration, corporate request and newsletter (subscribe → confirm) tested end-to-end; validation errors preserve typed values
+- Admin: login, create session, edit program (changes visible immediately on the public site), inboxes, CSV export, backup download
+- Mobile (375 px) layout without horizontal overflow; RTL/LTR switching keeps the current page
+- Production build and TypeScript check pass
+
+## 7. Future LMS (e-learning) roadmap
+
+The architecture is ready for an LMS module without rebuilding the site:
+
+- **Already in place:** learner accounts (`User.role = LEARNER`), sign-in/sign-up, learner dashboard (`/[locale]/account`), registrations linked to users (`Registration.userId`), favorites, quiz engine (`Quiz` component + JSON questions), media storage, role-based admin.
+- **To add:** Prisma models `Course`, `Module`, `Lesson` (video/file/text), `Enrollment`, `LessonProgress`, `QuestionBank`/`Question`/`Attempt`, `LiveSession` (Zoom/Teams link), `CompletionCertificate` (PDF generated with a verification code). Add pages under `src/app/[locale]/learn/…` and admin resources in `src/lib/admin-resources.ts` (the generic admin CRUD supports new models by configuration).
+- **Certificates:** must be described as *program certificates of completion*, never as PMI certifications.
+
+## 8. Things you need to provide
+
+Real portrait photo · contact details (email, phone, WhatsApp, LinkedIn, address) · program durations/hours and session dates · optional CV PDF · real testimonials with consent · certificate scans/IDs (optional) · domain name, hosting and SMTP account · Google Analytics ID (optional).

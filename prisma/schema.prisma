@@ -1,0 +1,357 @@
+// Daw Zainelabideen – data model
+// Development uses SQLite. For production run `npm run db:use-postgres` to switch the provider.
+// Enum-like fields are stored as strings (see src/lib/constants.ts) so the schema is portable.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────── Users & security ─────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         String     @default("LEARNER") // ADMIN | EDITOR | LEARNER
+  active       Boolean    @default(true)
+  locale       String     @default("ar")
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  favorites    Favorite[]
+  auditLogs    AuditLog[]
+  // LMS-ready: registrations can be linked to a learner account
+  registrations Registration[]
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String // create | update | delete | login | export | backup | status
+  entity    String
+  entityId  String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ───────────── Training ─────────────
+
+model Program {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  code            String? // short label e.g. PMP
+  category        String    @default("certification") // certification | management | agile | technology | tools
+  titleAr         String
+  titleEn         String
+  summaryAr       String
+  summaryEn       String
+  descriptionAr   String
+  descriptionEn   String
+  objectivesAr    String    @default("") // one item per line
+  objectivesEn    String    @default("")
+  audienceAr      String    @default("")
+  audienceEn      String    @default("")
+  prerequisitesAr String    @default("")
+  prerequisitesEn String    @default("")
+  outlineAr       String    @default("")
+  outlineEn       String    @default("")
+  outcomesAr      String    @default("")
+  outcomesEn      String    @default("")
+  deliveryAr      String    @default("")
+  deliveryEn      String    @default("")
+  durationAr      String    @default("") // free text, e.g. "5 أيام"
+  durationEn      String    @default("")
+  hours           Int?
+  image           String?
+  status          String    @default("COMING_SOON") // OPEN | COMING_SOON | ON_REQUEST | CLOSED
+  featured        Boolean   @default(false)
+  published       Boolean   @default(true)
+  order           Int       @default(0)
+  metaTitleAr     String?
+  metaTitleEn     String?
+  metaDescAr      String?
+  metaDescEn      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        CourseSession[]
+  registrations   Registration[]
+}
+
+model CourseSession {
+  id            String         @id @default(cuid())
+  programId     String
+  program       Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  startDate     DateTime
+  endDate       DateTime?
+  scheduleAr    String         @default("") // e.g. "الأحد – الخميس، 5:00 – 9:00 م"
+  scheduleEn    String         @default("")
+  mode          String         @default("IN_PERSON") // IN_PERSON | ONLINE | HYBRID
+  locationAr    String         @default("")
+  locationEn    String         @default("")
+  seats         Int? // null = not announced
+  status        String         @default("OPEN") // OPEN | FULL | CLOSED
+  published     Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  registrations Registration[]
+
+  @@index([startDate])
+}
+
+model Registration {
+  id           String         @id @default(cuid())
+  programId    String
+  program      Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  sessionId    String?
+  session      CourseSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  userId       String?
+  user         User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  fullName     String
+  email        String
+  phone        String
+  organization String?
+  jobTitle     String?
+  city         String?
+  notes        String?
+  locale       String         @default("ar")
+  status       String         @default("NEW") // NEW | CONTACTED | CONFIRMED | WAITLIST | CANCELLED
+  adminNotes   String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([createdAt])
+}
+
+// ───────────── Consulting & corporate ─────────────
+
+model ConsultingService {
+  id             String                @id @default(cuid())
+  slug           String                @unique
+  icon           String                @default("pmo")
+  titleAr        String
+  titleEn        String
+  summaryAr      String
+  summaryEn      String
+  descriptionAr  String
+  descriptionEn  String
+  deliverablesAr String                @default("")
+  deliverablesEn String                @default("")
+  published      Boolean               @default(true)
+  order          Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  requests       ConsultationRequest[]
+}
+
+model ConsultationRequest {
+  id            String             @id @default(cuid())
+  serviceId     String?
+  service       ConsultingService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  name          String
+  email         String
+  phone         String?
+  organization  String?
+  description   String
+  contactMethod String             @default("EMAIL") // EMAIL | PHONE | WHATSAPP | ONLINE_MEETING
+  preferredDate String?
+  locale        String             @default("ar")
+  status        String             @default("NEW") // NEW | CONTACTED | SCHEDULED | DONE | CLOSED
+  adminNotes    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+model CorporateRequest {
+  id             String   @id @default(cuid())
+  organization   String
+  sector         String
+  traineesCount  Int?
+  programs       String
+  mode           String   @default("IN_PERSON")
+  duration       String?
+  contactName    String
+  jobTitle       String?
+  email          String
+  phone          String
+  notes          String?
+  attachmentPath String?
+  attachmentName String?
+  locale         String   @default("ar")
+  status         String   @default("NEW") // NEW | CONTACTED | PROPOSAL_SENT | WON | LOST
+  adminNotes     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ContactMessage {
+  id         String   @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  subject    String
+  message    String
+  locale     String   @default("ar")
+  status     String   @default("NEW") // NEW | REPLIED | CLOSED
+  adminNotes String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ───────────── Knowledge Hub ─────────────
+
+model Resource {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  type        String     @default("ARTICLE") // ARTICLE | TIP | VIDEO | TEMPLATE | QUIZ
+  category    String     @default("general") // pmp | pmbok | risk | agile | ai | general
+  titleAr     String
+  titleEn     String
+  excerptAr   String     @default("")
+  excerptEn   String     @default("")
+  bodyAr      String     @default("") // Markdown
+  bodyEn      String     @default("")
+  coverImage  String?
+  videoUrl    String? // YouTube / Vimeo URL
+  fileUrl     String? // downloadable template
+  quizJson    String? // see docs/ADMIN-GUIDE.md for the format
+  readMinutes Int?
+  published   Boolean    @default(true)
+  featured    Boolean    @default(false)
+  publishedAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  favorites   Favorite[]
+
+  @@index([publishedAt])
+}
+
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, resourceId])
+}
+
+// ───────────── Credibility content ─────────────
+
+model Credential {
+  id           String   @id @default(cuid())
+  kind         String   @default("PROFESSIONAL") // PROFESSIONAL | ACADEMIC
+  code         String? // PMP, RMP, ACP …
+  titleAr      String
+  titleEn      String
+  issuerAr     String
+  issuerEn     String
+  year         Int?
+  credentialId String?
+  verifyUrl    String?
+  image        String?
+  descriptionAr String  @default("")
+  descriptionEn String  @default("")
+  published    Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Testimonial {
+  id         String   @id @default(cuid())
+  name       String
+  roleAr     String   @default("")
+  roleEn     String   @default("")
+  quoteAr    String
+  quoteEn    String
+  programRef String?
+  photo      String?
+  consent    Boolean  @default(false) // the person approved publishing
+  published  Boolean  @default(false)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Stat {
+  id        String   @id @default(cuid())
+  value     Int
+  prefix    String   @default("")
+  suffix    String   @default("")
+  labelAr   String
+  labelEn   String
+  source    String   @default("") // internal note: where this number comes from
+  animate   Boolean  @default(true)
+  published Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Faq {
+  id         String   @id @default(cuid())
+  scope      String   @default("general") // general | corporate | consulting | programs
+  questionAr String
+  questionEn String
+  answerAr   String
+  answerEn   String
+  published  Boolean  @default(true)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ───────────── Newsletter, media, settings, notifications ─────────────
+
+model Subscriber {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  locale         String    @default("ar")
+  token          String    @unique
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  path      String // storage-relative path
+  url       String // public URL (/uploads/…)
+  mime      String
+  size      Int
+  altAr     String   @default("")
+  altEn     String   @default("")
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  type      String // registration | consultation | corporate | contact | subscriber
+  title     String
+  body      String
+  link      String?
+  read      Boolean   @default(false)
+  emailedAt DateTime?
+  emailError String?
+  createdAt DateTime  @default(now())
+
+  @@index([createdAt])
+}
