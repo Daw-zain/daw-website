@@ -159,6 +159,22 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           </div>
         </section>
       )}
+      {/* ───────────── ALDALEEL RAQAMEE ───────────── */}
+      {settings.partnerLogo && (
+        <section className="pt-6">
+          <div className="container-x">
+            <Reveal className="group flex flex-col items-center gap-5 rounded-3xl border border-line bg-white p-6 text-center shadow-card transition hover:border-[#353a98]/30 hover:shadow-lift sm:flex-row sm:p-7 sm:text-start">
+              <div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-2xl bg-white p-2 ring-1 ring-line transition-transform duration-500 group-hover:scale-105">
+                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={112} height={79} className="h-full w-full object-contain" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-[#353a98]">{t.home.partnerName}</h2>
+                <p className="mt-1 leading-7 text-slate">{t.home.partnerText}</p>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
       {/* ───────────── ABOUT PMI ───────────── */}
       <section className="pt-20">
         <div className="container-x">

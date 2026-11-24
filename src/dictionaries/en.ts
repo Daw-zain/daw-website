@@ -153,6 +153,8 @@ const en = {
     corporateText:
       "From training-needs assessment to measuring impact — tailored programs for government entities, banks, oil & gas, IT and private companies, delivered on-site or online.",
     statsTitle: "Milestones",
+    partnerName: "Aldaleel Raqamee for IT & GIS",
+    partnerText: "Business Development Manager at Aldaleel Raqamee for Information Technology and Geographic Information Systems since 2015.",
     atpTitle: "PMI® Authorized Training Partner",
     atpText: "Exam preparation for PMP®, PMI-RMP®, PMI-ACP® and CAPM® led by a trainer who holds three PMI certifications.",
     testimonialsEyebrow: "Testimonials",

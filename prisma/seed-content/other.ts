@@ -128,6 +128,7 @@ export const settings: Record<string, string> = {
   heroImage: "/images/brand/daw-zainelabideen-portrait.jpg",
   aboutImage: "/images/brand/daw-zainelabideen-portrait.jpg",
   atpBadge: "/images/brand/pmi-authorized-training-partner.png",
+  partnerLogo: "/images/brand/aldaleel-raqamee-logo.png",
   contactEmail: "training@aldaleel.ly",
   adminNotifyEmail: "training@aldaleel.ly",
   phone: "+218 91 218 6622",

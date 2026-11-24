@@ -218,7 +218,7 @@ export async function deleteRequest(type: string, id: string) {
 
 // ───────────── Settings ─────────────
 
-const SETTING_UPLOADS: Partial<Record<SettingKey, "image" | "file">> = { heroImage: "image", aboutImage: "image", atpBadge: "image", cvUrl: "file" };
+const SETTING_UPLOADS: Partial<Record<SettingKey, "image" | "file">> = { heroImage: "image", aboutImage: "image", atpBadge: "image", partnerLogo: "image", cvUrl: "file" };
 
 export async function saveSettings(form: FormData): Promise<AdminResult> {
   const user = await requireStaff("ADMIN");

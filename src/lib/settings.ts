@@ -17,6 +17,7 @@ export const SETTING_KEYS = {
   aboutImage: "",
   cvUrl: "",
   atpBadge: "",
+  partnerLogo: "",
   adminNotifyEmail: "",
   heroTitleAr: "",
   heroTitleEn: "",

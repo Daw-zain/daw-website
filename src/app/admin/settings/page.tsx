@@ -31,6 +31,7 @@ const GROUPS: { title: { ar: string; en: string }; fields: F[] }[] = [
       { key: "heroImage", label: { ar: "الصورة الشخصية في الواجهة (صورة حقيقية لصاحب الموقع)", en: "Hero portrait (real photo of the site owner)" }, type: "image", help: { ar: "يُفضل صورة عمودية 4:5 بجودة عالية بصيغة WebP أو JPG.", en: "Portrait 4:5, high quality, WebP or JPG recommended." } },
       { key: "aboutImage", label: { ar: "صورة صفحة من أنا (اختياري)", en: "About page photo (optional)" }, type: "image" },
       { key: "atpBadge", label: { ar: "شارة شريك التدريب المعتمد من PMI (اتركها فارغة لإخفائها)", en: "PMI Authorized Training Partner badge (leave empty to hide)" }, type: "image" },
+      { key: "partnerLogo", label: { ar: "شعار شركة الدليل الرقمي في الصفحة الرئيسية (اتركه فارغًا لإخفائه)", en: "Aldaleel Raqamee logo on the home page (leave empty to hide)" }, type: "image" },
       { key: "cvUrl", label: { ar: "ملف السيرة الذاتية PDF", en: "CV (PDF)" }, type: "file", help: { ar: "إن تُرك فارغًا، يُستخدم ملف السيرة القابل للطباعة المُنشأ تلقائيًا.", en: "If empty, the auto-generated printable CV page is used." } },
     ],
   },
