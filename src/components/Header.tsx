@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string };
 
-export function Header({ locale, t, signedIn }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean }) {
+export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean; partnerLogo?: string }) {
   const pathname = usePathname() || `/${locale}`;
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -62,9 +63,25 @@ export function Header({ locale, t, signedIn }: { locale: Locale; t: Pick<Dictio
         {t.nav.skip}
       </a>
       <div className={cn("container-x flex items-center justify-between gap-2 transition-all max-[380px]:px-3 sm:gap-4", scrolled ? "h-16" : "h-20")}>
-        <Link href={L("")} aria-label={t.meta.siteName} className="min-w-0 shrink">
-          <Logo locale={locale} />
-        </Link>
+        <div className="flex min-w-0 shrink items-center gap-3 lg:gap-4">
+          <Link href={L("")} aria-label={t.meta.siteName} className="min-w-0 shrink">
+            <Logo locale={locale} />
+          </Link>
+          {partnerLogo && (
+            <>
+              <span className="hidden h-9 w-px shrink-0 bg-line sm:block" aria-hidden="true" />
+              <Image
+                src={partnerLogo}
+                alt={locale === "ar" ? "الدليل الرقمي لتقنية المعلومات والنظم الجغرافية" : "Aldaleel Raqamee for IT & GIS"}
+                title={locale === "ar" ? "الدليل الرقمي لتقنية المعلومات والنظم الجغرافية" : "Aldaleel Raqamee for IT & GIS"}
+                width={57}
+                height={40}
+                priority
+                className="hidden h-9 w-auto shrink-0 transition-transform duration-300 hover:scale-110 sm:block"
+              />
+            </>
+          )}
+        </div>
 
         <nav aria-label="Main" className="hidden xl:block">
           <ul className="flex items-center gap-6">

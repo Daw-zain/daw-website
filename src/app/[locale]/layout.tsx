@@ -51,7 +51,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
     <html lang={locale} dir={dir(locale)} className={`${inter.variable} ${plexArabic.variable}`}>
       <body className="flex min-h-screen flex-col">
         <MotionProvider>
-          <Header locale={locale} t={{ nav: t.nav, meta: t.meta }} signedIn={!!user} />
+          <Header locale={locale} t={{ nav: t.nav, meta: t.meta }} signedIn={!!user} partnerLogo={settings.partnerLogo || undefined} />
           <main id="main" className="flex-1">
             {children}
           </main>

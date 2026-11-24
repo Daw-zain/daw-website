@@ -62,6 +62,12 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
         <div className="container-x grid items-center gap-14 pb-24 pt-14 sm:pt-20 lg:grid-cols-[1.15fr_1fr] lg:pb-28">
           <div>
+            {settings.partnerLogo && (
+              <div className="fade-up mb-6 inline-flex items-center gap-3 rounded-2xl bg-white/95 px-3 py-2 shadow-lg sm:hidden">
+                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={46} height={32} className="h-8 w-auto" />
+                <span className="text-xs font-semibold text-[#353a98]">{t.home.partnerName}</span>
+              </div>
+            )}
             <p className="eyebrow fade-up text-gold">{t.home.eyebrow}</p>
             <h1 className="mt-5 space-y-3 text-[2.05rem] font-bold leading-[1.35] text-white sm:space-y-4 sm:text-5xl lg:text-[3.4rem]">
               {titleLines.map((line, i) => (
