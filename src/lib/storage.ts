@@ -9,7 +9,8 @@ import crypto from "node:crypto";
  *  storage/private  → private attachments (e.g. corporate needs files), served only to staff
  * On serverless hosting replace these helpers with S3 / R2 / Blob storage.
  */
-export const STORAGE_ROOT = path.join(process.cwd(), "storage");
+// STORAGE_DIR lets hosting point uploads at a persistent volume (e.g. /data on Railway).
+export const STORAGE_ROOT = process.env.STORAGE_DIR ? path.resolve(process.env.STORAGE_DIR) : path.join(process.cwd(), "storage");
 export const PUBLIC_DIR = path.join(STORAGE_ROOT, "uploads");
 export const PRIVATE_DIR = path.join(STORAGE_ROOT, "private");
 

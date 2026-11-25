@@ -18,6 +18,24 @@ Copy `.env.example` to `.env` and set:
 
 The site stores uploaded files on disk (`storage/`), so the recommended hosting is a **VPS or a container platform with a persistent volume** (e.g. a Linux VPS with Nginx, Railway/Render/Fly.io with a volume). Serverless hosting (e.g. Vercel) would require moving uploads to object storage (S3/R2/Blob) — replace the helpers in `src/lib/storage.ts`.
 
+### Railway (deploys automatically from GitHub)
+
+`railway.json` is already in the repo. Every push to `main` redeploys the site.
+
+1. Sign in at https://railway.com with the GitHub account and create a project → **Deploy from GitHub repo** → `daw-website`.
+2. In the project add **Database → PostgreSQL**.
+3. On the web service add a **Volume** mounted at `/data`.
+4. Web service → **Variables**:
+   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
+   - `STORAGE_DIR` = `/data`
+   - `AUTH_SECRET` = a long random string (32+ chars)
+   - `ADMIN_EMAIL`, `ADMIN_PASSWORD` (first admin; change the password after first sign-in)
+   - `SITE_URL` = the public URL (e.g. `https://daw.aldaleel.ly`)
+   - SMTP variables from section 3
+5. **Settings → Networking → Generate Domain** (or add the custom domain and create the CNAME record at the domain's DNS).
+
+The build switches Prisma to PostgreSQL; on start the app runs `prisma db push`, seeds missing content (never overwrites admin edits) and starts Next.js on `$PORT`.
+
 ### Steps (Linux VPS example)
 
 ```bash
