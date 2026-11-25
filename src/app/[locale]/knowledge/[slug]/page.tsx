@@ -13,6 +13,7 @@ import { formatDate, pick, siteUrl, youtubeEmbed } from "@/lib/utils";
 import { JsonLd, ShareButtons, PageHero } from "@/components/ui";
 import { ResourceCard } from "@/components/cards";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { withBase } from "@/lib/env-public";
 import { Quiz, type QuizQuestion } from "@/components/Quiz";
 import { DownloadIcon } from "@/components/Icons";
 import { Reveal } from "@/components/motion";
@@ -115,7 +116,7 @@ export default async function ResourcePage({ params }: Props) {
           {r.fileUrl && (
             <Reveal className="card mt-8 flex flex-wrap items-center justify-between gap-4 bg-sky-50 p-6">
               <p className="font-semibold text-navy">{title}</p>
-              <a href={r.fileUrl} download className="btn btn-primary">
+              <a href={withBase(r.fileUrl)} download className="btn btn-primary">
                 <DownloadIcon className="h-5 w-5" />
                 {t.knowledge.downloadTemplate}
               </a>

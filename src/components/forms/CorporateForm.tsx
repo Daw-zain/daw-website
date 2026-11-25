@@ -2,9 +2,29 @@
 
 import { useActionState } from "react";
 import { submitCorporate, type FormState } from "@/app/actions/public";
+import { WithQuery } from "@/components/WithQuery";
+import { IS_STATIC } from "@/lib/env-public";
 import { Consent, Field, FormAlert, FormMeta, Select, Submit, SuccessPanel, TextArea, errText, type FormT } from "./FormKit";
 
-export function CorporateForm({
+type Props = {
+  locale: string;
+  t: FormT;
+  sectors: Record<string, string>;
+  modes: Record<string, string>;
+  programs: { value: string; slug?: string; label: string }[];
+  preselected?: string;
+};
+
+/** ?program=<slug> in the URL preselects the program */
+export function CorporateForm(props: Props) {
+  return (
+    <WithQuery fallback={<CorporateFormInner {...props} />}>
+      {(q) => <CorporateFormInner {...props} preselected={props.preselected ?? props.programs.find((p) => p.slug === q.get("program"))?.value} />}
+    </WithQuery>
+  );
+}
+
+function CorporateFormInner({
   locale,
   t,
   sectors,
@@ -73,15 +93,18 @@ export function CorporateForm({
         <Field name="jobTitle" label={t.jobTitle} t={t} autoComplete="organization-title" defaultValue={v.jobTitle} />
         <Field name="email" type="email" label={t.email} t={t} required dir="ltr" autoComplete="email" defaultValue={v.email} error={e("email")} />
         <Field name="phone" type="tel" label={t.phone} t={t} required dir="ltr" autoComplete="tel" defaultValue={v.phone} error={e("phone")} />
-        <Field
-          name="attachment"
-          type="file"
-          label={t.attachment}
-          t={t}
-          accept=".pdf,.doc,.docx,.xls,.xlsx"
-          error={e("attachment")}
-          className="[&_input]:py-2.5 [&_input]:file:me-3 [&_input]:file:rounded-lg [&_input]:file:border-0 [&_input]:file:bg-sky [&_input]:file:px-3 [&_input]:file:py-1.5 [&_input]:file:font-semibold [&_input]:file:text-navy"
-        />
+        {/* The static (GitHub Pages) site has no file storage: files are sent by email after the request. */}
+        {!IS_STATIC && (
+          <Field
+            name="attachment"
+            type="file"
+            label={t.attachment}
+            t={t}
+            accept=".pdf,.doc,.docx,.xls,.xlsx"
+            error={e("attachment")}
+            className="[&_input]:py-2.5 [&_input]:file:me-3 [&_input]:file:rounded-lg [&_input]:file:border-0 [&_input]:file:bg-sky [&_input]:file:px-3 [&_input]:file:py-1.5 [&_input]:file:font-semibold [&_input]:file:text-navy"
+          />
+        )}
       </div>
       <TextArea name="notes" label={t.notes} t={t} rows={3} defaultValue={v.notes} />
       <Consent t={t} locale={locale} error={e("consent")} />

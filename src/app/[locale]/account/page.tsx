@@ -10,6 +10,8 @@ import { formatDate, pick } from "@/lib/utils";
 import { logout } from "@/app/actions/public";
 import { ResourceCard } from "@/components/cards";
 import { EmptyState, PageHero } from "@/components/ui";
+import { StaticAccount } from "@/components/StaticAccount";
+import { getResources } from "@/lib/queries";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -21,6 +23,19 @@ export default async function Account({ params }: { params: Promise<{ locale: st
   const { locale: l } = await params;
   const locale = l as Locale;
   const t = getDictionary(locale);
+
+  // GitHub Pages build: no server session — the dashboard is rendered in the browser from the Supabase session.
+  if (process.env.STATIC_EXPORT === "1") {
+    const resources = await getResources();
+    return (
+      <StaticAccount
+        locale={locale}
+        labels={{ welcome: t.account.welcome, dashboardText: t.account.dashboardText, logout: t.nav.logout, savedList: t.knowledge.savedList, noFavorites: t.account.noFavorites, knowledge: t.nav.knowledge }}
+        resources={resources.map((r) => ({ id: r.id, node: <ResourceCard r={r} locale={locale} t={t} /> }))}
+      />
+    );
+  }
+
   const user = await getCurrentUser();
   if (!user) redirect(`/${locale}/account/login?next=/${locale}/account`);
   const [favorites, registrations] = await Promise.all([

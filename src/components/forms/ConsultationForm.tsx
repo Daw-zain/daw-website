@@ -2,9 +2,27 @@
 
 import { useActionState } from "react";
 import { submitConsultation, type FormState } from "@/app/actions/public";
+import { WithQuery } from "@/components/WithQuery";
 import { Consent, Field, FormAlert, FormMeta, Select, Submit, SuccessPanel, TextArea, errText, type FormT } from "./FormKit";
 
-export function ConsultationForm({
+type Props = {
+  locale: string;
+  t: FormT;
+  services: { id: string; slug?: string; title: string }[];
+  methods: Record<string, string>;
+  defaultService?: string;
+};
+
+/** ?service=<slug> in the URL preselects the service */
+export function ConsultationForm(props: Props) {
+  return (
+    <WithQuery fallback={<ConsultationFormInner {...props} />}>
+      {(q) => <ConsultationFormInner {...props} defaultService={props.defaultService ?? props.services.find((s) => s.slug === q.get("service"))?.id} />}
+    </WithQuery>
+  );
+}
+
+function ConsultationFormInner({
   locale,
   t,
   services,

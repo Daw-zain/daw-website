@@ -20,9 +20,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMeta({ locale, path: "/contact", title: t.contact.title, description: t.contact.intro });
 }
 
-export default async function Contact({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string; subject?: string }> }) {
+export default async function Contact({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const sp = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const [settings, services, programs] = await Promise.all([getSettings(), getServices(), getPrograms()]);
@@ -37,8 +36,6 @@ export default async function Contact({ params, searchParams }: { params: Promis
     settings.linkedin && { Icon: LinkedInIcon, label: t.contact.linkedin, value: "LinkedIn", href: settings.linkedin, ltr: true },
     address && { Icon: PinIcon, label: t.contact.location, value: address, href: settings.mapUrl || undefined, ltr: false },
   ].filter(Boolean) as { Icon: typeof MailIcon; label: string; value: string; href?: string; ltr: boolean }[];
-
-  const initial = sp.tab === "consultation" ? 1 : sp.tab === "corporate" ? 2 : 0;
 
   return (
     <>
@@ -79,17 +76,17 @@ export default async function Contact({ params, searchParams }: { params: Promis
           </Reveal>
           <Reveal delay={0.1} className="card p-6 sm:p-10">
             <ContactTabs
-              initial={initial}
+              keys={["message", "consultation", "corporate"]}
               tabs={[
-                { label: t.contact.tabs.message, content: <ContactForm locale={locale} t={t.forms} defaultSubject={sp.subject} /> },
+                { label: t.contact.tabs.message, content: <ContactForm locale={locale} t={t.forms} /> },
                 {
                   label: t.contact.tabs.consultation,
-                  content: <ConsultationForm locale={locale} t={t.forms} services={services.map((s) => ({ id: s.id, title: pick(s, "title", locale) }))} methods={t.categories.contactMethod} />,
+                  content: <ConsultationForm locale={locale} t={t.forms} services={services.map((s) => ({ id: s.id, slug: s.slug, title: pick(s, "title", locale) }))} methods={t.categories.contactMethod} />,
                 },
                 {
                   label: t.contact.tabs.corporate,
                   content: (
-                    <CorporateForm locale={locale} t={t.forms} sectors={t.categories.sector} modes={t.status.mode} programs={programs.map((p) => ({ value: p.titleEn, label: pick(p, "title", locale) }))} />
+                    <CorporateForm locale={locale} t={t.forms} sectors={t.categories.sector} modes={t.status.mode} programs={programs.map((p) => ({ value: p.titleEn, slug: p.slug, label: pick(p, "title", locale) }))} />
                   ),
                 },
               ]}

@@ -20,9 +20,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 const sectorIcons = { government: BuildingIcon, banking: ShieldIcon, oil_gas: GaugeIcon, it: SparkIcon, private: ChartIcon, education: CapIcon, other: CompassIcon };
 const whatIcons = [LayersIcon, TargetIcon, UsersIcon, FileIcon, CompassIcon, ChartIcon];
 
-export default async function Corporate({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ program?: string }> }) {
+export default async function Corporate({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const { program } = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const [programs, faqs] = await Promise.all([getPrograms(), getFaqs("corporate")]);
@@ -103,8 +102,7 @@ export default async function Corporate({ params, searchParams }: { params: Prom
               t={t.forms}
               sectors={t.categories.sector}
               modes={t.status.mode}
-              programs={programs.map((p) => ({ value: p.titleEn, label: pick(p, "title", locale) }))}
-              preselected={programs.find((p) => p.slug === program)?.titleEn}
+              programs={programs.map((p) => ({ value: p.titleEn, slug: p.slug, label: pick(p, "title", locale) }))}
             />
           </Reveal>
         </div>

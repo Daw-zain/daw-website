@@ -4,15 +4,41 @@ import { useActionState, useMemo, useState } from "react";
 import { submitRegistration, type FormState } from "@/app/actions/public";
 import { Consent, Field, FormAlert, FormMeta, Select, Submit, SuccessPanel, TextArea, errText, type FormT } from "./FormKit";
 import Link from "next/link";
+import { WithQuery } from "@/components/WithQuery";
 
 export type ProgramOption = {
   id: string;
+  slug?: string;
   title: string;
   status: string;
   sessions: { id: string; label: string; disabled: boolean }[];
 };
 
-export function RegistrationForm({
+type Props = {
+  locale: string;
+  t: FormT;
+  programs: ProgramOption[];
+  defaultProgram?: string;
+  defaultSession?: string;
+  noSessionLabel: string;
+  lockProgram?: boolean;
+  exploreLabel: string;
+};
+
+/** ?program=<slug>&session=<id> in the URL preselects the program/date */
+export function RegistrationForm(props: Props) {
+  return (
+    <WithQuery fallback={<RegistrationFormInner {...props} />}>
+      {(q) => {
+        const slug = q.get("program");
+        const program = props.defaultProgram ?? props.programs.find((p) => p.slug === slug)?.id;
+        return <RegistrationFormInner {...props} defaultProgram={program} defaultSession={props.defaultSession ?? q.get("session") ?? undefined} />;
+      }}
+    </WithQuery>
+  );
+}
+
+function RegistrationFormInner({
   locale,
   t,
   programs,

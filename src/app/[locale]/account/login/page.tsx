@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getCurrentUser } from "@/lib/auth";
+import { getSettings } from "@/lib/settings";
 import { pageMeta } from "@/lib/seo";
+import { AuthShell } from "@/components/AuthShell";
 import { LoginForm } from "@/components/forms/AccountForms";
-import { LogoPortrait } from "@/components/Logo";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -14,27 +15,30 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMeta({ locale, path: "/account/login", title: getDictionary(locale).account.loginTitle, noindex: true });
 }
 
-export default async function Login({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string }> }) {
+export default async function Login({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const { next } = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   if (await getCurrentUser()) redirect(`/${locale}/account`);
+  const settings = await getSettings();
   return (
-    <section className="grid min-h-[70vh] place-items-center bg-mist px-5 py-16">
-      <div className="card w-full max-w-md p-8 sm:p-10">
-        <LogoPortrait className="h-12 w-12" />
-        <h1 className="mt-6 text-2xl font-bold">{t.account.loginTitle}</h1>
-        <div className="mt-6">
-          <LoginForm locale={locale} a={t.account} f={t.forms} next={next} />
-        </div>
-        <p className="mt-6 text-sm text-slate">
+    <AuthShell
+      locale={locale}
+      t={t}
+      mode="login"
+      title={t.account.loginTitle}
+      text={t.account.loginText}
+      partnerLogo={settings.partnerLogo || undefined}
+      footer={
+        <>
           {t.account.noAccount}{" "}
           <Link href={`/${locale}/account/register`} className="font-semibold text-brand hover:underline">
             {t.account.createAccount}
           </Link>
-        </p>
-      </div>
-    </section>
+        </>
+      }
+    >
+      <LoginForm locale={locale} a={t.account} f={t.forms} />
+    </AuthShell>
   );
 }

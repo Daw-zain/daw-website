@@ -1,15 +1,29 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toggleFavorite } from "@/app/actions/public";
 import { BookmarkIcon } from "./Icons";
 import { cn } from "@/lib/utils";
+import { IS_STATIC } from "@/lib/env-public";
+import { supabase } from "@/lib/static/supabase";
+import { readFavorites } from "@/lib/static/actions";
 
 export function FavoriteButton({ id, locale, initial, labels }: { id: string; locale: string; initial: boolean; labels: { save: string; saved: string; login: string } }) {
   const [saved, setSaved] = useState(initial);
   const [pending, start] = useTransition();
   const router = useRouter();
+  // Static site: saved state lives in this browser for the signed-in learner.
+  useEffect(() => {
+    if (!IS_STATIC) return;
+    supabase()
+      .auth.getSession()
+      .then(({ data }) => {
+        const u = data.session?.user;
+        if (u) setSaved(readFavorites(u.id).includes(id));
+      })
+      .catch(() => {});
+  }, [id]);
   return (
     <button
       type="button"

@@ -17,14 +17,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMeta({ locale, path: "/consulting", title: t.consulting.title, description: t.consulting.intro });
 }
 
-export default async function Consulting({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ service?: string }> }) {
+export default async function Consulting({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const { service } = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const [services, faqs] = await Promise.all([getServices(), getFaqs("consulting")]);
   const L = (p: string) => `/${locale}${p}`;
-  const pre = services.find((s) => s.slug === service)?.id;
 
   return (
     <>
@@ -81,9 +79,8 @@ export default async function Consulting({ params, searchParams }: { params: Pro
             <ConsultationForm
               locale={locale}
               t={t.forms}
-              services={services.map((s) => ({ id: s.id, title: pick(s, "title", locale) }))}
+              services={services.map((s) => ({ id: s.id, slug: s.slug, title: pick(s, "title", locale) }))}
               methods={t.categories.contactMethod}
-              defaultService={pre}
             />
           </Reveal>
         </div>

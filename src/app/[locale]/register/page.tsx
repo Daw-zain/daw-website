@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
-import { db } from "@/lib/db";
 import { registrationOptions } from "@/lib/program-options";
 import { pageMeta } from "@/lib/seo";
 import { PageHero } from "@/components/ui";
@@ -16,13 +15,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMeta({ locale, path: "/register", title: t.cta.enroll, description: t.home.finalText });
 }
 
-export default async function Register({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ program?: string; session?: string }> }) {
+export default async function Register({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const sp = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const options = await registrationOptions(locale);
-  const pre = sp.program ? await db.program.findFirst({ where: { slug: sp.program }, select: { id: true } }) : null;
   const L = (p: string) => `/${locale}${p}`;
 
   return (
@@ -35,8 +32,6 @@ export default async function Register({ params, searchParams }: { params: Promi
               locale={locale}
               t={t.forms}
               programs={options}
-              defaultProgram={pre?.id}
-              defaultSession={sp.session}
               noSessionLabel={t.forms.noSessionOption}
               exploreLabel={t.cta.explore}
             />

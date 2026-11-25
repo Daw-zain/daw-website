@@ -1,7 +1,6 @@
 "use server";
 
 import crypto from "node:crypto";
-import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -9,43 +8,26 @@ import { checkSpam, rateLimit } from "@/lib/spam";
 import { notifyAdmin } from "@/lib/notify";
 import { clientIp, createSession, destroySession, getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
 import { saveFile } from "@/lib/storage";
-import { ATTACHMENT_TYPES, CONTACT_METHODS, SECTORS, SESSION_MODES, UPLOAD_MAX_BYTES, isLocale } from "@/lib/constants";
+import { ATTACHMENT_TYPES, UPLOAD_MAX_BYTES, isLocale } from "@/lib/constants";
 import { emailLayout, escapeHtml, sendMail } from "@/lib/mail";
 import { siteUrl } from "@/lib/utils";
+import {
+  type FormState,
+  consultationSchema,
+  contactSchema,
+  corporateSchema,
+  emailSchema as email,
+  formLocale as loc,
+  formValues as values,
+  loginSchema,
+  registerSchema,
+  registrationSchema,
+  safeNext,
+  zodErrors,
+} from "@/lib/form-schemas";
 
-export type FormState = {
-  ok: boolean;
-  /** dictionary key under forms.errors / forms.success / newsletter / account */
-  message?: string;
-  errors?: Record<string, string>;
-  /** echo back values so the form keeps them after a server error */
-  values?: Record<string, string>;
-};
-
-const phoneRe = /^[+\d][\d\s()-]{6,20}$/;
-const str = (max = 200) => z.string().trim().max(max);
-const req = (max = 200) => str(max).min(1, "required");
-const email = z.string().trim().toLowerCase().min(1, "required").email("email").max(200);
-const phone = z.string().trim().min(1, "required").regex(phoneRe, "phone");
-const optPhone = z.string().trim().max(30).refine((v) => v === "" || phoneRe.test(v), "phone");
-const consent = z.literal("on", { errorMap: () => ({ message: "consent" }) });
-
-function zodErrors(err: z.ZodError) {
-  const out: Record<string, string> = {};
-  for (const i of err.issues) {
-    const k = String(i.path[0]);
-    if (!out[k]) out[k] = i.message === "Required" || i.code === "invalid_type" ? "required" : i.message;
-  }
-  return out;
-}
-
-function values(form: FormData) {
-  const v: Record<string, string> = {};
-  form.forEach((val, key) => {
-    if (typeof val === "string" && !key.startsWith("_") && key !== "website") v[key] = v[key] ? `${v[key]}, ${val}` : val;
-  });
-  return v;
-}
+// NOTE: this file is swapped for src/lib/static/actions.ts in the GitHub Pages (static) build.
+export type { FormState };
 
 async function guard(form: FormData, bucket: string): Promise<FormState | null> {
   if (checkSpam(form) === "spam") return { ok: false, message: "spam", values: values(form) };
@@ -53,25 +35,7 @@ async function guard(form: FormData, bucket: string): Promise<FormState | null> 
   return null;
 }
 
-const loc = (form: FormData) => {
-  const l = String(form.get("_locale") ?? "ar");
-  return isLocale(l) ? l : "ar";
-};
-
 // ───────────── Course registration ─────────────
-
-const registrationSchema = z.object({
-  programId: req(40),
-  sessionId: str(40).optional(),
-  fullName: req(120),
-  email,
-  phone,
-  organization: str(150).optional(),
-  jobTitle: str(120).optional(),
-  city: str(80).optional(),
-  notes: str(2000).optional(),
-  consent,
-});
 
 export async function submitRegistration(_prev: FormState, form: FormData): Promise<FormState> {
   const g = await guard(form, "reg");
@@ -147,18 +111,6 @@ export async function submitRegistration(_prev: FormState, form: FormData): Prom
 
 // ───────────── Consultation request ─────────────
 
-const consultationSchema = z.object({
-  serviceId: str(40).optional(),
-  name: req(120),
-  email,
-  phone: optPhone.optional(),
-  organization: str(150).optional(),
-  description: req(3000),
-  contactMethod: z.enum(CONTACT_METHODS),
-  preferredDate: str(40).optional(),
-  consent,
-});
-
 export async function submitConsultation(_prev: FormState, form: FormData): Promise<FormState> {
   const g = await guard(form, "consult");
   if (g) return g;
@@ -201,25 +153,6 @@ export async function submitConsultation(_prev: FormState, form: FormData): Prom
 }
 
 // ───────────── Corporate training request ─────────────
-
-const corporateSchema = z.object({
-  organization: req(150),
-  sector: z.enum(SECTORS),
-  traineesCount: z
-    .string()
-    .trim()
-    .optional()
-    .refine((v) => !v || (/^\d+$/.test(v) && Number(v) > 0 && Number(v) < 100000), "required"),
-  programs: req(1000),
-  mode: z.enum(SESSION_MODES),
-  duration: str(120).optional(),
-  contactName: req(120),
-  jobTitle: str(120).optional(),
-  email,
-  phone,
-  notes: str(3000).optional(),
-  consent,
-});
 
 export async function submitCorporate(_prev: FormState, form: FormData): Promise<FormState> {
   const g = await guard(form, "corp");
@@ -286,15 +219,6 @@ export async function submitCorporate(_prev: FormState, form: FormData): Promise
 
 // ───────────── Contact message ─────────────
 
-const contactSchema = z.object({
-  name: req(120),
-  email,
-  phone: optPhone.optional(),
-  subject: req(200),
-  message: req(5000),
-  consent,
-});
-
 export async function submitContact(_prev: FormState, form: FormData): Promise<FormState> {
   const g = await guard(form, "contact");
   if (g) return g;
@@ -351,8 +275,6 @@ export async function subscribeNewsletter(_prev: FormState, form: FormData): Pro
 
 // ───────────── Learner accounts (LMS-ready) ─────────────
 
-const loginSchema = z.object({ email, password: z.string().min(1, "required").max(200) });
-
 export async function learnerLogin(_prev: FormState, form: FormData): Promise<FormState> {
   if (!rateLimit(`login:${await clientIp()}`, 10)) return { ok: false, message: "rate" };
   const parsed = loginSchema.safeParse(Object.fromEntries(form));
@@ -363,17 +285,9 @@ export async function learnerLogin(_prev: FormState, form: FormData): Promise<Fo
   }
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await createSession(user);
-  const next = String(form.get("next") ?? "");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : `/${loc(form)}/account`);
+  
+  redirect(safeNext(String(form.get("next") ?? ""), `/${loc(form)}/account`));
 }
-
-const registerSchema = z.object({
-  name: req(120),
-  email,
-  password: z.string().min(8, "weak").max(200),
-  confirm: z.string(),
-  consent,
-});
 
 export async function learnerRegister(_prev: FormState, form: FormData): Promise<FormState> {
   const g = await guard(form, "signup");
@@ -408,4 +322,28 @@ export async function toggleFavorite(resourceId: string, locale: string): Promis
   }
   revalidatePath(`/${isLocale(locale) ? locale : "ar"}/account`);
   return { saved: !existing };
+}
+
+/** Confirm / unsubscribe from a newsletter link (?action=confirm|unsubscribe&token=…) */
+export async function newsletterToken(action: string, token: string): Promise<"confirmed" | "unsubscribed" | "invalid"> {
+  if (!/^[a-f0-9]{48}$/.test(token) || (action !== "confirm" && action !== "unsubscribe")) return "invalid";
+  const sub = await db.subscriber.findUnique({ where: { token } });
+  if (!sub) return "invalid";
+  if (action === "confirm") {
+    await db.subscriber.update({ where: { id: sub.id }, data: { confirmedAt: sub.confirmedAt ?? new Date(), unsubscribedAt: null } });
+    return "confirmed";
+  }
+  await db.subscriber.update({ where: { id: sub.id }, data: { unsubscribedAt: new Date() } });
+  return "unsubscribed";
+}
+
+/** Self-service password reset is handled by Supabase on the public (static) site; locally an admin resets learner passwords. */
+export async function requestPasswordReset(_prev: FormState, form: FormData): Promise<FormState> {
+  const parsed = email.safeParse(form.get("email"));
+  if (!parsed.success) return { ok: false, errors: { email: "email" }, values: values(form) };
+  return { ok: false, message: "resetUnavailable", values: values(form) };
+}
+
+export async function completePasswordReset(_prev: FormState, _form: FormData): Promise<FormState> {
+  return { ok: false, message: "resetUnavailable" };
 }

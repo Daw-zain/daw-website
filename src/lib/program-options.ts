@@ -22,6 +22,7 @@ export async function registrationOptions(locale: Locale): Promise<ProgramOption
   });
   return programs.map((p) => ({
     id: p.id,
+    slug: p.slug,
     title: pick(p, "title", locale),
     status: p.status,
     sessions: p.sessions.map((s) => {

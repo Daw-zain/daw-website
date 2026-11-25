@@ -3,8 +3,24 @@
 import { useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { WithQuery } from "./WithQuery";
 
-export function ContactTabs({ tabs, initial = 0 }: { tabs: { label: string; content: ReactNode }[]; initial?: number }) {
+type Tab = { label: string; content: ReactNode };
+
+/** `keys` maps ?tab=<key> in the URL to a tab (e.g. /contact?tab=consultation). */
+export function ContactTabs({ tabs, initial = 0, keys }: { tabs: Tab[]; initial?: number; keys?: string[] }) {
+  if (!keys) return <TabsInner tabs={tabs} initial={initial} />;
+  return (
+    <WithQuery fallback={<TabsInner tabs={tabs} initial={initial} />}>
+      {(q) => {
+        const i = keys.indexOf(q.get("tab") ?? "");
+        return <TabsInner key={i} tabs={tabs} initial={i >= 0 ? i : initial} />;
+      }}
+    </WithQuery>
+  );
+}
+
+function TabsInner({ tabs, initial }: { tabs: Tab[]; initial: number }) {
   const [active, setActive] = useState(initial);
   return (
     <div>

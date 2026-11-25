@@ -1,0 +1,84 @@
+# Builds the public website as static HTML from the Supabase database and publishes it to GitHub Pages.
+# Runs on every push to main, every day at 03:00 Libya time (to pick up admin edits), or by hand:
+#   GitHub → Actions → "Publish website" → Run workflow
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   DATABASE_URL                   Supabase "Session pooler" connection string
+#   NEXT_PUBLIC_SUPABASE_URL       https://<project>.supabase.co
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  the project's public anon key
+name: Publish website
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          missing=0
+          for v in DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::Missing repository secret $v (see docs/GITHUB-PAGES.md)"; missing=1; fi
+          done
+          exit $missing
+
+      - run: npm ci
+
+      - name: Prepare static site
+        run: node scripts/prepare-static.mjs
+
+      - name: Build
+        env:
+          STATIC_EXPORT: "1"
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          npx prisma generate
+          npx next build
+          node scripts/finish-static.mjs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

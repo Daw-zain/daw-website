@@ -4,7 +4,8 @@ import { isLocale, PROGRAM_CATEGORIES, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getPrograms } from "@/lib/queries";
 import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
-import { cn, pick, siteUrl } from "@/lib/utils";
+import { pick, siteUrl } from "@/lib/utils";
+import { DomFilter, FilterChips } from "@/components/QueryFilters";
 import { PageHero, JsonLd } from "@/components/ui";
 import { ProgramCard } from "@/components/cards";
 import { Reveal } from "@/components/motion";
@@ -16,14 +17,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return pageMeta({ locale, path: "/programs", title: t.programs.title, description: t.programs.intro });
 }
 
-export default async function Programs({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ category?: string }> }) {
+export default async function Programs({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
-  const { category } = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const all = await getPrograms();
   const cats = PROGRAM_CATEGORIES.filter((c) => all.some((p) => p.category === c));
-  const list = category && cats.includes(category as (typeof cats)[number]) ? all.filter((p) => p.category === category) : all;
   const L = (p: string) => `/${locale}${p}`;
 
   return (
@@ -51,29 +50,17 @@ export default async function Programs({ params, searchParams }: { params: Promi
 
       <section className="py-16">
         <div className="container-x">
-          <nav aria-label={t.knowledge.category} className="flex flex-wrap gap-2">
-            {[{ key: "", label: t.programs.filterAll }, ...cats.map((c) => ({ key: c, label: (t.categories.program as Record<string, string>)[c] }))].map((c) => {
-              const active = (category ?? "") === c.key || (!cats.includes(category as (typeof cats)[number]) && c.key === "");
-              return (
-                <Link
-                  key={c.key}
-                  href={c.key ? L(`/programs?category=${c.key}`) : L("/programs")}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={cn("rounded-full border px-4 py-2 text-sm font-semibold transition", active ? "border-navy bg-navy text-white" : "border-line bg-white text-navy hover:border-brand hover:text-brand")}
-                >
-                  {c.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((p, i) => (
-              <Reveal key={p.id} delay={(i % 3) * 0.06}>
-                <ProgramCard p={p} locale={locale} t={t} />
-              </Reveal>
+          <FilterChips navLabel={t.knowledge.category} groups={[{ param: "category", allLabel: t.programs.filterAll, options: cats.map((c) => ({ key: c, label: (t.categories.program as Record<string, string>)[c] })) }]} />
+          <div id="programs-grid" className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {all.map((p, i) => (
+              <div key={p.id} data-filter-item="" data-f-category={p.category}>
+                <Reveal delay={(i % 3) * 0.06}>
+                  <ProgramCard p={p} locale={locale} t={t} />
+                </Reveal>
+              </div>
             ))}
           </div>
+          <DomFilter scope="programs-grid" params={["category"]} />
           <p className="mt-12 rounded-xl bg-mist px-5 py-4 text-sm leading-7 text-slate">{t.programs.pmiNote}</p>
         </div>
       </section>

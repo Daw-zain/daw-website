@@ -15,7 +15,7 @@ import { RegistrationForm } from "@/components/forms/RegistrationForm";
 import { ProgramCard } from "@/components/cards";
 import { CalendarIcon, CheckIcon, ClockIcon, LayersIcon, PinIcon, TargetIcon, UsersIcon } from "@/components/Icons";
 
-type Props = { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ session?: string }> };
+type Props = { params: Promise<{ locale: string; slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale, slug } = await params;
@@ -53,9 +53,8 @@ function ListBlock({ title, items, icon: Icon }: { title: string; items: string[
   );
 }
 
-export default async function ProgramPage({ params, searchParams }: Props) {
+export default async function ProgramPage({ params }: Props) {
   const { locale: l, slug } = await params;
-  const { session: sessionParam } = await searchParams;
   const locale = l as Locale;
   const t = getDictionary(locale);
   const p = await getProgram(slug);
@@ -271,7 +270,6 @@ export default async function ProgramPage({ params, searchParams }: Props) {
                   t={t.forms}
                   programs={options}
                   defaultProgram={p.id}
-                  defaultSession={sessionParam}
                   noSessionLabel={t.forms.noSessionOption}
                   lockProgram
                   exploreLabel={t.cta.explore}

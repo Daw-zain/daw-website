@@ -1,10 +1,12 @@
-import Link from "next/link";
-import { headers } from "next/headers";
-import { getDictionary } from "@/lib/i18n";
+"use client";
 
-export default async function NotFound() {
-  const h = await headers();
-  const path = h.get("x-pathname") || "";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { getDictionary } from "@/lib/i18n";
+import { BASE_PATH } from "@/lib/env-public";
+
+export default function NotFound() {
+  const path = (usePathname() || "").replace(BASE_PATH, "");
   const locale = /^\/en(\/|$)/.test(path) ? "en" : "ar";
   const t = getDictionary(locale);
   return (

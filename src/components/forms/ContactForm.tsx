@@ -2,9 +2,17 @@
 
 import { useActionState } from "react";
 import { submitContact, type FormState } from "@/app/actions/public";
+import { WithQuery } from "@/components/WithQuery";
 import { Consent, Field, FormAlert, FormMeta, Submit, SuccessPanel, TextArea, errText, type FormT } from "./FormKit";
 
-export function ContactForm({ locale, t, defaultSubject }: { locale: string; t: FormT; defaultSubject?: string }) {
+type Props = { locale: string; t: FormT; defaultSubject?: string };
+
+/** ?subject=… in the URL pre-fills the subject */
+export function ContactForm(props: Props) {
+  return <WithQuery fallback={<ContactFormInner {...props} />}>{(q) => <ContactFormInner {...props} defaultSubject={props.defaultSubject ?? q.get("subject") ?? undefined} />}</WithQuery>;
+}
+
+function ContactFormInner({ locale, t, defaultSubject }: Props) {
   const [state, action] = useActionState<FormState, FormData>(submitContact, { ok: false });
   const v = state.values ?? {};
   const e = (k: string) => errText(t, state.errors?.[k]);
