@@ -158,7 +158,8 @@ try {
       ok(`Enrolled learner → bank ${name} refused`, /forbidden/.test(r.error), r.error);
     }
     r = await call("select public.exam_course_folders($1)", PMP);
-    ok("Learner folders: no bank, no question count", r.value?.length === 4 && r.value.every((f) => f.kind !== "QUESTION_BANK" && f.count == null), "");
+    // learners never see the bank or a question count; exam folders show the number of PUBLISHED exams (phase 5)
+    ok("Learner folders: no bank, no question count", r.value?.length === 4 && r.value.every((f) => f.kind !== "QUESTION_BANK" && (["DOMAIN_TESTS", "EXAM_SIMULATIONS"].includes(f.kind) ? f.count === 0 : f.count == null)), JSON.stringify(r.value?.map((f) => [f.kind, f.count])));
     await as(users.inst);
     r = await call("select public.exam_course_folders($1)", PMP);
     ok("Staff folders: bank shows question count", r.value?.find((f) => f.kind === "QUESTION_BANK")?.count === 9, JSON.stringify(r.value?.find((f) => f.kind === "QUESTION_BANK")));

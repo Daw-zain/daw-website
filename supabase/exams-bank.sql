@@ -497,6 +497,10 @@ begin
   select * into q from public."Question" where "id" = p_id;
   if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   perform public.exam_require_perm(q."programId", 'canDeleteQuestions');
+  -- phase 5: a question picked into an exam cannot be deleted (remove it from the exam, or disable it)
+  if exists (select 1 from public."ExamItem" where "questionId" = p_id) then
+    raise exception 'question_in_exam' using errcode = '23503';
+  end if;
   select coalesce(jsonb_agg("path"), '[]'::jsonb) into v_paths from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
   delete from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
   delete from public."Question" where "id" = p_id;

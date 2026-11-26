@@ -95,6 +95,7 @@ model Program {
   questions       Question[]
   scenarios       Scenario[]
   examAssets      ExamAsset[]
+  exams           Exam[]
 }
 
 model CourseSession {
@@ -440,6 +441,7 @@ model ExamFolder {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
+  exams       Exam[]
 
   @@index([programId])
 }
@@ -512,6 +514,7 @@ model Question {
   updatedAt   DateTime          @default(now()) @updatedAt
   secret      QuestionSecret?
   versions    QuestionVersion[]
+  examItems   ExamItem[]
   // Phase 4: a question may belong to one multi-question scenario (shared case text, shown once)
   scenarioId    String?
   scenario      Scenario?       @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
@@ -607,4 +610,88 @@ model ExamAsset {
   createdAt   DateTime @default(now())
 
   @@index([ownerType, ownerId])
+}
+
+// ───────────── Exam system · Phase 5: exam builder ─────────────
+// An exam lives in one folder of its course (Domain Tests / Exam Simulations / custom) and is built from
+// that course's bank: hand-picked questions (ExamItem) and/or random-draw rules (ExamRule). Every setting
+// the brief lists (timing, attempts, order, review/result/feedback policies, tools, security) is a column
+// or the "security" JSON. Effective score of a question = points × weight.
+
+model Exam {
+  id                String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId         String
+  program           Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  folderId          String
+  folder            ExamFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
+  titleAr           String
+  titleEn           String     @default("")
+  descAr            String     @default("")
+  descEn            String     @default("")
+  examType          String     @default("PRACTICE") // PRACTICE | SIMULATION | FINAL
+  durationMinutes   Int? // null = untimed
+  graceSeconds      Int        @default(0)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  maxAttempts       Int? // null = unlimited
+  shuffleQuestions  Boolean    @default(true)
+  shuffleOptions    Boolean    @default(true)
+  passPercent       Decimal    @default(70) @db.Decimal(5, 2)
+  reviewPolicy      String     @default("AFTER_SUBMIT") // NEVER | AFTER_SUBMIT | AFTER_CLOSE
+  resultsPolicy     String     @default("IMMEDIATE") // IMMEDIATE | AFTER_CLOSE | MANUAL
+  showFeedback      Boolean    @default(true) // in review only, never during the attempt
+  showExplanation   Boolean    @default(true) // in review only
+  showCorrect       Boolean    @default(true) // correct answers in review
+  allowCalculator   Boolean    @default(false)
+  allowWhiteboard   Boolean    @default(false)
+  allowTranslation  Boolean    @default(true)
+  resumePolicy      String     @default("RESUME") // RESUME (timer keeps running) | NO_RESUME
+  security          Json       @default("{}") // {fullscreen, detectBlur, maxWarnings, onExceed: WARN|SUBMIT|REVIEW, watermark, blockCopy}
+  status            String     @default("DRAFT") // DRAFT | PENDING_APPROVAL | PUBLISHED | STOPPED | ARCHIVED
+  reviewNote        String     @default("") // admin note when sending back to draft
+  approvedById      String?
+  approvedAt        DateTime?
+  publishedAt       DateTime?
+  version           Int        @default(1)
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @default(now()) @updatedAt
+  items             ExamItem[]
+  rules             ExamRule[]
+
+  @@index([programId, status])
+  @@index([folderId])
+}
+
+model ExamItem {
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  examId     String
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  position   Int
+  points     Decimal? @db.Decimal(8, 2) // null = the question's own points
+  weight     Decimal? @db.Decimal(8, 2) // null = the question's own weight
+
+  @@unique([examId, questionId])
+  @@index([examId, position])
+}
+
+model ExamRule {
+  id         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  examId     String
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  position   Int
+  count      Int // how many questions to draw (for a scenario rule: how many scenarios)
+  domainId   String?
+  topicId    String?
+  subtopicId String?
+  difficulty String? // EASY | MEDIUM | HARD
+  qtype      String? // question type
+  scenarios  Boolean  @default(false) // false = standalone questions; true = draw whole scenarios (all their active questions)
+  points     Decimal? @db.Decimal(8, 2)
+  weight     Decimal? @db.Decimal(8, 2)
+
+  @@index([examId, position])
 }

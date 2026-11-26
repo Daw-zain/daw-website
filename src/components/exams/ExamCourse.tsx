@@ -113,6 +113,15 @@ function Folders({ locale, labels, programId, canSeePeople }: { locale: string; 
                     {labels.bank.open}
                   </Link>
                 </div>
+              ) : ["DOMAIN_TESTS", "EXAM_SIMULATIONS", "CUSTOM"].includes(f.kind) && f.count != null ? (
+                <div className="mt-auto flex items-center justify-between gap-3 pt-2">
+                  <span className="text-sm text-slate">
+                    <span className="text-lg font-bold text-navy">{f.count}</span> {labels.builder.exams}
+                  </span>
+                  <Link href={`/${locale}/exams/folder?id=${encodeURIComponent(f.id)}`} className="btn btn-primary btn-sm">
+                    {labels.builder.folderOpen}
+                  </Link>
+                </div>
               ) : (
                 <p className="mt-auto rounded-lg bg-mist px-3 py-2 text-sm text-slate">{labels.course.empty[f.kind] ?? labels.course.empty.CUSTOM}</p>
               )}

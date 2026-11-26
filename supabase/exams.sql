@@ -212,7 +212,11 @@ begin
       'descAr', f."descAr", 'descEn', f."descEn", 'status', f."status",
       -- staff see how many questions the bank holds (phase 3); learners never see the bank folder
       'count', case when f."kind" = 'QUESTION_BANK' and v_access in ('ADMIN', 'INSTRUCTOR')
-                    then (select count(*) from public."Question" q where q."programId" = p_program) end
+                    then (select count(*) from public."Question" q where q."programId" = p_program)
+                    -- phase 5: exams in the folder (learners: published only)
+                    when f."kind" in ('DOMAIN_TESTS', 'EXAM_SIMULATIONS', 'CUSTOM')
+                    then (select count(*) from public."Exam" x where x."folderId" = f."id"
+                            and (v_access in ('ADMIN', 'INSTRUCTOR') or x."status" = 'PUBLISHED')) end
       ) order by f."sortOrder", f."createdAt"), '[]'::jsonb)
     from public."ExamFolder" f
     where f."programId" = p_program
