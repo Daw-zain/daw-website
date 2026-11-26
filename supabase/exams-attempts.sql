@@ -176,6 +176,8 @@ begin
       ok := (select count(*) from jsonb_each_text(coalesce(r -> 'place', '{}'::jsonb)) e where e.value is not null);
       wrongs := ok - hits;
     end if;
+    -- never award marks against an empty key (exams only draw ACTIVE questions, which always have one)
+    if coalesce(n, 0) = 0 then return jsonb_build_object('score', 0, 'correct', false, 'manual', false); end if;
     if hits = n and wrongs = 0 then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
     if mode = 'PARTIAL' then
       return jsonb_build_object('score', round(p_max * hits / greatest(n, ok), 2), 'correct', false, 'manual', false);

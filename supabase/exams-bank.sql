@@ -552,7 +552,14 @@ begin
     raise exception 'invalid_question: scenario';
   end if;
 
-  norm := public.exam_bank_validate(v_type, p_q -> 'content', p_q -> 'answer', p_q -> 'scoring');
+  -- phase 10: a hotspot draft may have no areas yet (the image can only be uploaded once the question
+  -- exists, and the areas are drawn on it). It cannot go ACTIVE like that (checked below and in set_status).
+  if v_type = 'HOTSPOT' and v_status <> 'ACTIVE' and coalesce(jsonb_array_length(case when jsonb_typeof(p_q -> 'answer' -> 'regions') = 'array' then p_q -> 'answer' -> 'regions' end), 0) = 0 then
+    norm := jsonb_build_object('content', '{}'::jsonb, 'answer', jsonb_build_object('regions', '[]'::jsonb),
+      'scoring', jsonb_build_object('mode', case when p_q -> 'scoring' ->> 'mode' in ('PARTIAL', 'PARTIAL_PENALTY') then p_q -> 'scoring' ->> 'mode' else 'ALL_OR_NOTHING' end));
+  else
+    norm := public.exam_bank_validate(v_type, p_q -> 'content', p_q -> 'answer', p_q -> 'scoring');
+  end if;
   -- phase 10: optional table / chart for any type
   v_fig := public.exam_bank_figure(p_q -> 'content' -> 'figure');
   if v_fig is not null then norm := jsonb_set(norm, '{content}', coalesce(norm -> 'content', '{}'::jsonb) || jsonb_build_object('figure', v_fig)); end if;
@@ -628,8 +635,11 @@ begin
   select "programId" into v_program from public."Question" where "id" = p_id;
   if v_program is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   me := public.exam_require_perm(v_program, 'canEditQuestions');
-  if p_status = 'ACTIVE' and (select "type" from public."Question" where "id" = p_id) = 'HOTSPOT' and not public.exam_bank_hotspot_ready(p_id) then
-    raise exception 'invalid_question: hotspot_image_missing';
+  if p_status = 'ACTIVE' and (select "type" from public."Question" where "id" = p_id) = 'HOTSPOT' then
+    if not public.exam_bank_hotspot_ready(p_id) then raise exception 'invalid_question: hotspot_image_missing'; end if;
+    if coalesce(jsonb_array_length((select "answer" -> 'regions' from public."QuestionSecret" where "questionId" = p_id)), 0) = 0 then
+      raise exception 'invalid_question: hotspot_regions_missing';
+    end if;
   end if;
   update public."Question" set "status" = p_status, "updatedById" = me."id", "updatedAt" = now() where "id" = p_id;
   perform public.exam_log('question.status', 'Question', p_id, v_program, jsonb_build_object('status', p_status));

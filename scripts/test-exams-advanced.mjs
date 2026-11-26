@@ -45,8 +45,8 @@ try {
 
     // ── validation: HOTSPOT ──
     const HS = { type: "HOTSPOT", stemAr: "حدد المرحلة الحرجة على المخطط" };
-    let r = await save({ ...HS, answer: {} });
-    ok("Hotspot without areas is refused", err(r) === "hotspot_regions_missing", err(r));
+    let r = await save({ ...HS, status: "ACTIVE", answer: {} });
+    ok("ACTIVE hotspot without areas is refused", err(r) === "hotspot_regions_missing", err(r));
     r = await save({ ...HS, answer: { regions: [{ x: 90, y: 10, w: 20, h: 10 }] } });
     ok("Hotspot area outside the image is refused", err(r) === "hotspot_region_bad", err(r));
     r = await save({ ...HS, answer: { regions: [{ x: "10", y: 10, w: 20, h: 10 }] } });
@@ -55,6 +55,19 @@ try {
     ok("More than 10 hotspot areas are refused", err(r) === "hotspot_regions_max_10", err(r));
     r = await save({ ...HS, status: "ACTIVE", answer: { regions: [{ x: 10, y: 10, w: 20, h: 20 }] } });
     ok("A hotspot cannot be ACTIVE before its image is attached", err(r) === "hotspot_image_missing", err(r));
+    r = await save({ ...HS, answer: {} });
+    const qDraftHS = r.value?.id;
+    ok("A hotspot DRAFT may be saved before its areas exist (image is uploaded after the first save)", qDraftHS && r.value.answer.regions.length === 0, err(r));
+    await j("exam_asset_register", "QUESTION", qDraftHS, `${PMP}/${qDraftHS}/${randomUUID()}.png`, "image/png", 1000, "x.png", "", "");
+    r = await j("exam_bank_question_set_status", qDraftHS, "ACTIVE");
+    ok("…but it cannot go ACTIVE without areas, even with its image", err(r) === "hotspot_regions_missing", err(r));
+    r = await save({ ...HS, id: qDraftHS, status: "ACTIVE", answer: {} });
+    ok("…nor be saved as ACTIVE without areas", err(r) === "hotspot_regions_missing", err(r));
+    g0: {
+      const g = await grade({ type: "HOTSPOT", scoring: { mode: "ALL_OR_NOTHING" }, answer: { regions: [] } }, { points: [{ x: 1, y: 1 }] });
+      ok("Grading never gives marks against an empty hotspot key", Number(g.score) === 0 && g.correct === false, JSON.stringify(g));
+      break g0;
+    }
     r = await save({ ...HS, scoring: { mode: "PARTIAL_PENALTY" }, answer: { regions: [{ id: "a", x: 10, y: 10, w: 20, h: 20 }, { id: "b", x: 60, y: 50, w: 30, h: 30 }] } });
     const qHS = r.value?.id;
     ok("Hotspot saved as draft; areas live only in the secret answer", qHS && r.value.answer.regions.length === 2 && JSON.stringify(r.value.content) === "{}", err(r));
