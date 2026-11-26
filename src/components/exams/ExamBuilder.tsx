@@ -95,6 +95,8 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
   const [note, setNote] = useState("");
 
   const editable = !!e.canEdit && (e.status === "DRAFT" || e.status === "PENDING_APPROVAL" || !e.id);
+  // known before the first save too (a new exam has no server answer yet)
+  const canPublish = e.canPublish ?? (course.access === "ADMIN" || !!course.permissions?.canPublishExams);
   const set = (patch: Partial<ExamFull>) => setE((cur) => ({ ...cur, ...patch }));
   const setSec = (patch: Partial<ExamFull["security"]>) => setE((cur) => ({ ...cur, security: { ...cur.security, ...patch } }));
   const setRule = (i: number, patch: Partial<ExamRuleRow>) => setE((cur) => ({ ...cur, rules: cur.rules.map((r, j) => (j === i ? { ...r, ...patch } : r)) }));
@@ -140,6 +142,7 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
     try {
       const saved = editable ? await rpc<ExamFull>("exam_exam_save", { p_e: toSaveExam(e) }) : e;
       setE(saved);
+      if (!e.id && saved.id) window.history.replaceState(null, "", window.location.pathname + `?id=${encodeURIComponent(saved.id)}`);
       const r = await rpc<ExamFull>("exam_exam_publish", { p_id: saved.id });
       setE(r);
       setFlash({ tone: "success", text: bl.statuses[r.status] });
@@ -403,7 +406,7 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
         {editable && (
           <>
             <button type="button" onClick={save} disabled={busy} className="btn btn-outline">{e.id ? bl.saveCheck : bl.saveDraft}</button>
-            <button type="button" onClick={publish} disabled={busy} className="btn btn-primary">{e.canPublish ? bl.publish : bl.sendApproval}</button>
+            <button type="button" onClick={publish} disabled={busy} className="btn btn-primary">{canPublish ? bl.publish : bl.sendApproval}</button>
           </>
         )}
         {e.id && e.status === "PENDING_APPROVAL" && e.canApprove && (
@@ -416,7 +419,7 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
         {e.id && e.canEdit && e.status === "PUBLISHED" && <button type="button" onClick={() => run(() => rpc<ExamFull>("exam_exam_set_status", { p_id: e.id, p_status: "STOPPED" }), bl.statuses.STOPPED)} disabled={busy} className="btn btn-outline">{bl.stop}</button>}
         {e.id && e.canEdit && e.status === "STOPPED" && (
           <>
-            <button type="button" onClick={publish} disabled={busy} className="btn btn-primary">{e.canPublish ? bl.publish : bl.sendApproval}</button>
+            <button type="button" onClick={publish} disabled={busy} className="btn btn-primary">{canPublish ? bl.publish : bl.sendApproval}</button>
             <button type="button" onClick={() => run(() => rpc<ExamFull>("exam_exam_set_status", { p_id: e.id, p_status: "DRAFT" }), bl.statuses.DRAFT)} disabled={busy} className="btn btn-outline">{bl.toDraft}</button>
           </>
         )}
