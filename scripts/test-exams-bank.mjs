@@ -4,8 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP, CAPM] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
@@ -23,6 +23,9 @@ const VALID = {
   ORDERING: { content: { items: opts("بدء", "تخطيط", "تنفيذ") }, answer: { order: ["o1", "o2", "o3"] } },
   MATCHING: { content: { left: opts("CPI", "SPI"), right: opts("كلفة", "جدول", "مخاطر") }, answer: { pairs: { o1: "o1", o2: "o2" } } },
 };
+
+// what the same query finds before the test starts
+const [before] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase3.test') m, (select count(*)::int from public."Question") q, (select count(*)::int from public."QuestionCategory") c`);
 
 try {
   await db.$transaction(async (tx) => {
@@ -187,7 +190,7 @@ try {
 }
 
 const [left] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase3.test') m, (select count(*)::int from public."Question") q, (select count(*)::int from public."QuestionCategory") c`);
-ok("Rollback: no test data left (members, questions, categories)", left.m === 0 && left.q === 0 && left.c === 0, JSON.stringify(left));
+ok("Rollback: no test data left (members, questions, categories)", JSON.stringify(left) === JSON.stringify(before), JSON.stringify({ before, left }));
 await db.$disconnect();
 
 for (const t of results) console.log(`${t.pass ? "✔" : "✗"} ${t.name}${t.pass ? "" : `  ← ${t.info}`}`);

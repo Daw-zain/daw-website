@@ -436,6 +436,28 @@ begin
 end $$;
 
 -- Search / filter / page through a course bank (summaries only — the answer stays in the editor view)
+-- the questions of a course matching a list filter (internal: the callers check permissions)
+create or replace function public.exam_bank_match(p_program text, p_filter jsonb)
+returns setof public."Question"
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select q.* from public."Question" q
+  where q."programId" = p_program
+    and (nullif(p_filter ->> 'type', '') is null or q."type" = p_filter ->> 'type')
+    and (nullif(p_filter ->> 'status', '') is null or q."status" = p_filter ->> 'status')
+    and (nullif(p_filter ->> 'difficulty', '') is null or q."difficulty" = p_filter ->> 'difficulty')
+    and (nullif(p_filter ->> 'categoryId', '') is null or p_filter ->> 'categoryId' in (q."domainId", q."topicId", q."subtopicId"))
+    and (nullif(p_filter ->> 'scenarioId', '') is null
+         or (p_filter ->> 'scenarioId' = 'none' and q."scenarioId" is null)
+         or q."scenarioId" = p_filter ->> 'scenarioId')
+    and (nullif(trim(p_filter ->> 'q'), '') is null
+         or q."stemAr" ilike '%' || trim(p_filter ->> 'q') || '%' or q."stemEn" ilike '%' || trim(p_filter ->> 'q') || '%'
+         or exists (select 1 from unnest(q."keywords") kw where kw ilike '%' || trim(p_filter ->> 'q') || '%'))
+$$;
+
 create or replace function public.exam_bank_questions(p_program text, p_filter jsonb default '{}'::jsonb)
 returns jsonb
 language plpgsql
@@ -444,29 +466,15 @@ set search_path = public
 as $$
 declare
   f jsonb := coalesce(p_filter, '{}'::jsonb);
-  v_q text := nullif(trim(f ->> 'q'), '');
   v_page int := greatest(coalesce((f ->> 'page')::int, 1), 1);
   v_size int := least(greatest(coalesce((f ->> 'pageSize')::int, 25), 1), 100);
-  v_cat text := nullif(f ->> 'categoryId', '');
 begin
   perform public.exam_rate_hit('bank_list', 240);
   if not public.exam_is_course_staff(p_program) then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   return (
-    with m as (
-      select q.* from public."Question" q
-      where q."programId" = p_program
-        and (nullif(f ->> 'type', '') is null or q."type" = f ->> 'type')
-        and (nullif(f ->> 'status', '') is null or q."status" = f ->> 'status')
-        and (nullif(f ->> 'difficulty', '') is null or q."difficulty" = f ->> 'difficulty')
-        and (v_cat is null or v_cat in (q."domainId", q."topicId", q."subtopicId"))
-        and (nullif(f ->> 'scenarioId', '') is null
-             or (f ->> 'scenarioId' = 'none' and q."scenarioId" is null)
-             or q."scenarioId" = f ->> 'scenarioId')
-        and (v_q is null or q."stemAr" ilike '%' || v_q || '%' or q."stemEn" ilike '%' || v_q || '%'
-             or exists (select 1 from unnest(q."keywords") kw where kw ilike '%' || v_q || '%'))
-    )
+    with m as (select * from public.exam_bank_match(p_program, f))
     select jsonb_build_object(
       'total', (select count(*) from m),
       'page', v_page, 'pageSize', v_size,
@@ -698,6 +706,98 @@ begin
     execute format('revoke all on public.%I from anon, authenticated', t);
   end loop;
 end $$;
+
+-- "select all": the ids of every question matching the filter (all pages)
+create or replace function public.exam_bank_question_ids(p_program text, p_filter jsonb default '{}'::jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.exam_rate_hit('bank_list', 240);
+  if not coalesce(public.exam_is_course_staff(p_program), false) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  return (
+    with m as (select "id", "updatedAt" from public.exam_bank_match(p_program, coalesce(p_filter, '{}'::jsonb)))
+    select jsonb_build_object('total', (select count(*) from m),
+      'ids', coalesce((select jsonb_agg(x."id" order by x."updatedAt" desc, x."id") from (select * from m order by "updatedAt" desc, "id" limit 5000) x), '[]'::jsonb)));
+end $$;
+
+-- one action on several questions: copy | delete | status | difficulty | category.
+-- Each question goes through the same checks as the single action; one that is refused does not stop the others.
+create or replace function public.exam_bank_question_bulk(p_program text, p_action text, p_ids jsonb, p_args jsonb default '{}'::jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  args jsonb := coalesce(p_args, '{}'::jsonb);
+  v_ids text[]; v_id text; q public."Question"; patch jsonb; r jsonb; cat public."QuestionCategory";
+  v_done int := 0; v_same int := 0; v_failed jsonb := '[]'::jsonb; v_paths jsonb := '[]'::jsonb;
+begin
+  if p_action is null or p_action not in ('copy', 'delete', 'status', 'difficulty', 'category') then
+    raise exception 'invalid_question: action';
+  end if;
+  perform public.exam_require_perm(p_program, case when p_action = 'delete' then 'canDeleteQuestions' else 'canEditQuestions' end);
+  perform public.exam_rate_hit('bank_bulk', 120);
+  if coalesce(jsonb_typeof(p_ids), '') <> 'array' then raise exception 'invalid_question: ids'; end if;
+  select coalesce(array_agg(distinct x), '{}') into v_ids from jsonb_array_elements_text(p_ids) x;
+  if cardinality(v_ids) > 100 then raise exception 'invalid_question: max_100'; end if;
+
+  if p_action = 'status' and coalesce(args ->> 'status', '') not in ('DRAFT', 'ACTIVE', 'DISABLED') then
+    raise exception 'invalid_question: status';
+  elsif p_action = 'difficulty' then
+    if coalesce(args ->> 'difficulty', '') not in ('EASY', 'MEDIUM', 'HARD') then raise exception 'invalid_question: difficulty'; end if;
+    patch := jsonb_build_object('difficulty', args ->> 'difficulty');
+  elsif p_action = 'category' then
+    patch := jsonb_build_object('domainId', null, 'topicId', null, 'subtopicId', null);
+    if nullif(args ->> 'categoryId', '') is not null then
+      select * into cat from public."QuestionCategory" where "id" = args ->> 'categoryId' and "programId" = p_program;
+      if cat."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
+      -- saving fills in the parents of a topic or subtopic
+      patch := patch || jsonb_build_object(case cat."kind" when 'DOMAIN' then 'domainId' when 'TOPIC' then 'topicId' else 'subtopicId' end, cat."id");
+    end if;
+  end if;
+
+  foreach v_id in array v_ids loop
+    q := null;
+    begin
+      select * into q from public."Question" where "id" = v_id and "programId" = p_program;
+      if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
+      if (p_action = 'status' and q."status" = args ->> 'status')
+         or (p_action = 'difficulty' and q."difficulty" = args ->> 'difficulty')
+         or (p_action = 'category' and coalesce(q."subtopicId", q."topicId", q."domainId", '') = coalesce(args ->> 'categoryId', '')) then
+        v_same := v_same + 1;
+      else
+        if p_action = 'copy' then
+          perform public.exam_bank_question_copy(v_id);
+        elsif p_action = 'delete' then
+          r := public.exam_bank_question_delete(v_id);
+          v_paths := v_paths || coalesce(r -> 'paths', '[]'::jsonb);
+        elsif p_action = 'status' then
+          perform public.exam_bank_question_set_status(v_id, args ->> 'status');
+        else
+          perform public.exam_bank_question_save(p_program, public.exam_bank_question_json(v_id) || patch);
+        end if;
+        v_done := v_done + 1;
+      end if;
+    exception when others then
+      v_failed := v_failed || jsonb_build_object('id', v_id, 'stemAr', left(q."stemAr", 120), 'stemEn', left(q."stemEn", 120), 'reason', sqlerrm);
+    end;
+  end loop;
+  perform public.exam_log('question.bulk', 'Program', p_program, p_program,
+    jsonb_build_object('action', p_action, 'args', args, 'requested', cardinality(v_ids), 'done', v_done, 'failed', jsonb_array_length(v_failed)));
+  return jsonb_build_object('done', v_done, 'unchanged', v_same, 'failed', v_failed, 'paths', v_paths);
+end $$;
+
+revoke all on function public.exam_bank_match(text, jsonb) from public, anon, authenticated;
+revoke all on function public.exam_bank_question_ids(text, jsonb) from public, anon;
+revoke all on function public.exam_bank_question_bulk(text, text, jsonb, jsonb) from public, anon;
+grant execute on function public.exam_bank_question_ids(text, jsonb) to authenticated;
+grant execute on function public.exam_bank_question_bulk(text, text, jsonb, jsonb) to authenticated;
 
 revoke all on function public.exam_is_course_staff(text) from public, anon, authenticated;
 revoke all on function public.exam_require_perm(text, text) from public, anon, authenticated;

@@ -4,7 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");

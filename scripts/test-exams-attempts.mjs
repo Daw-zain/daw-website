@@ -4,8 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP, CAPM] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
@@ -13,6 +13,9 @@ const u = (n) => ({ sub: randomUUID(), email: `t-${n}@phase6.test` });
 const users = { admin: u("admin"), inst: u("inst"), noResults: u("noresults"), capm: u("capm"), l1: u("l1"), l2: u("l2"), outsider: u("outsider") };
 const SECRET_EXPL = "شرح سري لا يظهر أثناء الاختبار";
 const SECRET_FB = "تغذية سرية";
+
+// what the same query finds before the test starts
+const [before] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase6.test') m, (select count(*)::int from public."ExamAttempt") a, (select count(*)::int from public."Exam") e, (select count(*)::int from public."Question") q`);
 
 try {
   await db.$transaction(async (tx) => {
@@ -263,7 +266,7 @@ try {
 }
 
 const [left] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase6.test') m, (select count(*)::int from public."ExamAttempt") a, (select count(*)::int from public."Exam") e, (select count(*)::int from public."Question") q`);
-ok("Rollback: no test data left", left.m === 0 && left.a === 0 && left.e === 0 && left.q === 0, JSON.stringify(left));
+ok("Rollback: no test data left", JSON.stringify(left) === JSON.stringify(before), JSON.stringify({ before, left }));
 await db.$disconnect();
 
 for (const t of results) console.log(`${t.pass ? "✔" : "✗"} ${t.name}${t.pass ? "" : `  ← ${t.info}`}`);

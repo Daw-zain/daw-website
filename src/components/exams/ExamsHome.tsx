@@ -22,11 +22,16 @@ export function ExamsHome({ locale, labels, homeLabel }: { locale: string; label
         <>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <h2 className="text-2xl font-bold">{labels.myCourses}</h2>
-            {me.role === "ADMIN" && (
-              <Link href={`/${locale}/exams/admin`} className="btn btn-primary btn-sm">
-                {labels.manageMembers}
+            <div className="flex flex-wrap gap-2">
+              <Link href={`/${locale}/exams/analytics`} className="btn btn-outline btn-sm">
+                {labels.analytics.openMine}
               </Link>
-            )}
+              {me.role === "ADMIN" && (
+                <Link href={`/${locale}/exams/admin`} className="btn btn-primary btn-sm">
+                  {labels.manageMembers}
+                </Link>
+              )}
+            </div>
           </div>
           {me.courses.length === 0 ? (
             <div className="mt-6">

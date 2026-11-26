@@ -122,6 +122,12 @@ function Folders({ locale, labels, programId, canSeePeople }: { locale: string; 
                     {labels.builder.folderOpen}
                   </Link>
                 </div>
+              ) : f.kind === "RESULTS" ? (
+                <div className="mt-auto flex justify-end pt-2">
+                  <Link href={`/${locale}/exams/analytics?id=${encodeURIComponent(programId)}`} className="btn btn-primary btn-sm">
+                    {canSeePeople ? labels.analytics.open : labels.analytics.openMine}
+                  </Link>
+                </div>
               ) : f.kind === "MISTAKES_QUIZ" ? (
                 <div className="mt-auto flex justify-end pt-2">
                   <Link href={`/${locale}/exams/mistakes?id=${encodeURIComponent(programId)}`} className="btn btn-primary btn-sm">

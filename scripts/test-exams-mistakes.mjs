@@ -4,14 +4,17 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP, CAPM] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const SECRET_FB = "FEEDBACK-SECRET-9";
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
 const u = (n) => ({ sub: randomUUID(), email: `t-${n}@phase9.test` });
 const users = { admin: u("admin"), inst: u("inst"), noResults: u("noresults"), capm: u("capm"), l1: u("l1"), l2: u("l2") };
+
+// what the same query finds before the test starts
+const [before] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase9.test') m, (select count(*)::int from public."MistakeItem") i, (select count(*)::int from public."MistakeSession") s, (select role from public."ExamMember" where "email"='training@aldaleel.ly') admin`);
 
 try {
   await db.$transaction(async (tx) => {
@@ -251,7 +254,7 @@ try {
 }
 
 const [left] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase9.test') m, (select count(*)::int from public."MistakeItem") i, (select count(*)::int from public."MistakeSession") s, (select role from public."ExamMember" where "email"='training@aldaleel.ly') admin`);
-ok("Rollback: no test data left; the real admin keeps the ADMIN role", left.m === 0 && left.i === 0 && left.s === 0 && left.admin === "ADMIN", JSON.stringify(left));
+ok("Rollback: no test data left; the real admin keeps the ADMIN role", JSON.stringify(left) === JSON.stringify(before), JSON.stringify({ before, left }));
 await db.$disconnect();
 
 for (const t of results) console.log(`${t.pass ? "✔" : "✗"} ${t.name}${t.pass ? "" : `  ← ${t.info}`}`);

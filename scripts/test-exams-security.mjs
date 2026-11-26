@@ -5,13 +5,16 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP, CAPM] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
 const u = (n) => ({ sub: randomUUID(), email: `t-${n}@phase8.test` });
 const users = { admin: u("admin"), inst: u("inst"), noResults: u("noresults"), capm: u("capm"), l1: u("l1"), l2: u("l2") };
+
+// what the same query finds before the test starts
+const [before] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase8.test') m, (select count(*)::int from public."ProctorEvent") p, (select count(*)::int from public."ExamRateLimit" where "key" like '%:%') r, (select count(*)::int from public."Notification" where "type"='exam_security') n, (select role from public."ExamMember" where "email"='training@aldaleel.ly') admin`);
 
 try {
   await db.$transaction(async (tx) => {
@@ -139,7 +142,10 @@ try {
     r = await j("exam_security_log", 100);
     const acts = (r.value?.events ?? []).map((e) => e.action);
     ok("Admin security log: rate limit, auto-submit, review flag and its release", ["security.rate_limit", "security.auto_submit", "security.review_flag", "security.review_cleared"].every((a) => acts.includes(a)), acts.join(","));
-    ok("Admin sees attempts with warnings, most warnings first", r.value?.attempts?.[0]?.warnings === 3 && r.value.attempts.length >= 3, JSON.stringify(r.value?.attempts?.map((a) => a.warnings)));
+    // real attempts may be listed too: check the order, then look at the test learners only
+    const seen = r.value?.attempts ?? [];
+    const mine = seen.filter((a) => a.email.endsWith("@phase8.test"));
+    ok("Admin sees attempts with warnings, most warnings first", seen.every((a, i) => i === 0 || seen[i - 1].warnings >= a.warnings) && mine[0]?.warnings === 3 && mine.length >= 3, JSON.stringify(seen.map((a) => a.warnings)));
     await as(users.capm);
     r = await j("exam_security_log", 100);
     ok("CAPM instructor's log contains nothing from PMP", (r.value?.events ?? []).every((e) => e.programId !== PMP) && (r.value?.attempts ?? []).length === 0, JSON.stringify({ e: r.value?.events?.length, a: r.value?.attempts?.length }));
@@ -160,7 +166,7 @@ try {
 }
 
 const [left] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase8.test') m, (select count(*)::int from public."ProctorEvent") p, (select count(*)::int from public."ExamRateLimit" where "key" like '%:%') r, (select count(*)::int from public."Notification" where "type"='exam_security') n, (select role from public."ExamMember" where "email"='training@aldaleel.ly') admin`);
-ok("Rollback: no test data left; the real admin keeps the ADMIN role", left.m === 0 && left.p === 0 && left.n === 0 && left.admin === "ADMIN", JSON.stringify(left));
+ok("Rollback: no test data left; the real admin keeps the ADMIN role", JSON.stringify(left) === JSON.stringify(before), JSON.stringify({ before, left }));
 await db.$disconnect();
 
 for (const t of results) console.log(`${t.pass ? "✔" : "✗"} ${t.name}${t.pass ? "" : `  ← ${t.info}`}`);

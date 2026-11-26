@@ -24,6 +24,7 @@ import { QuestionPreview } from "./QuestionPreview";
 import { BankScenarios } from "./BankScenarios";
 import { removeFiles } from "./AssetManager";
 import { BankTransfer } from "./BankTransfer";
+import { BankBulkBar } from "./BankBulkBar";
 
 /** /[locale]/exams/bank?id=… — one course's question bank (admins and that course's instructors only) */
 export function ExamBank(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -76,7 +77,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
   const b = labels.bank;
   const [overview, setOverview] = useState<BankOverview | null>(null);
   const [tab, setTab] = useState<"questions" | "scenarios" | "categories" | "transfer">("questions");
-  // phase 11: questions picked for "export selected"
+  // selected questions (bulk actions and "export selected")
   const [picked, setPicked] = useState<string[]>([]);
   const [scenarioOpen, setScenarioOpen] = useState<string | null>(null);
   const [returnScenario, setReturnScenario] = useState<string | null>(null);
@@ -120,6 +121,10 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     return () => clearTimeout(t);
   }, [filter, loadList]);
 
+  const narrow = (patch: Partial<Filter>) => {
+    setPicked([]);
+    setFilter((f) => ({ ...f, ...patch, page: 1 }));
+  };
   const refresh = async () => { await Promise.all([loadOverview(), loadList(filter), loadScenarios()]); };
   // leaving the question editor: go back to the scenario it was opened from, if any
   const leaveEditor = () => {
@@ -217,14 +222,6 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
       {flash && <Notice tone={flash.tone}>{flash.text}</Notice>}
       {!can.edit && <Notice>{b.readOnly}</Notice>}
 
-      {can.export && tab === "questions" && picked.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2 text-sm">
-          <span>{b.transfer.pickedN.replace("{n}", String(picked.length))}</span>
-          <button type="button" onClick={() => setTab("transfer")} className="btn btn-primary btn-sm">{b.transfer.exportPicked}</button>
-          <button type="button" onClick={() => setPicked([])} className="text-gold-600 hover:underline">{b.transfer.clearSelection}</button>
-        </div>
-      )}
-
       {tab === "transfer" ? (
         <BankTransfer
           programId={course.programId}
@@ -255,20 +252,20 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-            <input type="search" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value, page: 1 })} placeholder={b.search} className="field lg:col-span-2" />
-            <select value={filter.type} onChange={(e) => setFilter({ ...filter, type: e.target.value, page: 1 })} className="field">
+            <input type="search" value={filter.q} onChange={(e) => narrow({ q: e.target.value })} placeholder={b.search} className="field lg:col-span-2" />
+            <select value={filter.type} onChange={(e) => narrow({ type: e.target.value })} className="field">
               <option value="">{b.allTypes}</option>
               {QUESTION_TYPES.map((t) => <option key={t} value={t}>{b.types[t]}</option>)}
             </select>
-            <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value, page: 1 })} className="field">
+            <select value={filter.status} onChange={(e) => narrow({ status: e.target.value })} className="field">
               <option value="">{b.allStatuses}</option>
               {(["DRAFT", "ACTIVE", "DISABLED"] as const).map((s) => <option key={s} value={s}>{b.statuses[s]}</option>)}
             </select>
-            <select value={filter.difficulty} onChange={(e) => setFilter({ ...filter, difficulty: e.target.value, page: 1 })} className="field">
+            <select value={filter.difficulty} onChange={(e) => narrow({ difficulty: e.target.value })} className="field">
               <option value="">{b.allDifficulties}</option>
               {(["EASY", "MEDIUM", "HARD"] as const).map((d) => <option key={d} value={d}>{b.difficulties[d]}</option>)}
             </select>
-            <select value={filter.categoryId} onChange={(e) => setFilter({ ...filter, categoryId: e.target.value, page: 1 })} className="field">
+            <select value={filter.categoryId} onChange={(e) => narrow({ categoryId: e.target.value })} className="field">
               <option value="">{b.allCategories}</option>
               {cats.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -279,6 +276,27 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
             </select>
           </div>
 
+          {(can.edit || can.delete || can.export) && list && (
+            <BankBulkBar
+              programId={course.programId}
+              picked={picked}
+              pageIds={list.items.map((q) => q.id)}
+              total={list.total}
+              filter={filter}
+              categories={cats}
+              can={{ edit: can.edit, delete: can.delete, export: can.export }}
+              onPick={setPicked}
+              onExport={() => setTab("transfer")}
+              onChanged={async (action) => {
+                // a deletion can empty the current page: go back to the first one
+                if (action === "delete" && filter.page > 1) setFilter((f) => ({ ...f, page: 1 }));
+                await refresh();
+              }}
+              locale={locale}
+              labels={labels}
+            />
+          )}
+
           {!list ? <Spinner /> : list.items.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-line bg-mist/60 px-6 py-10 text-center text-slate">{overview.counts.total === 0 ? b.emptyBank : b.noQuestions}</p>
           ) : (
@@ -286,7 +304,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
               {list.items.map((q) => (
                 <li key={q.id} className={cn("card p-4 sm:p-5", q.status === "DISABLED" && "opacity-70")}>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    {can.export && (
+                    {(can.edit || can.delete || can.export) && (
                       <input type="checkbox" checked={picked.includes(q.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, q.id] : picked.filter((x) => x !== q.id))} className="h-4 w-4 accent-[var(--color-brand)]" aria-label={b.transfer.pick} />
                     )}
                     <span className="rounded-md bg-navy px-2 py-0.5 font-semibold text-white">{b.types[q.type]}</span>
@@ -311,7 +329,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
                       </>
                     )}
                     {can.delete && (
-                      <button type="button" onClick={() => window.confirm(b.confirmDelete) && act(async () => { const r = await rpc<{ paths?: string[] }>("exam_bank_question_delete", { p_id: q.id }); await removeFiles(r.paths ?? []); }, b.deleted)} className="rounded-lg px-2.5 py-1 text-gold-600 hover:bg-gold/10">{b.delete}</button>
+                      <button type="button" onClick={() => window.confirm(b.confirmDelete) && act(async () => { const r = await rpc<{ paths?: string[] }>("exam_bank_question_delete", { p_id: q.id }); await removeFiles(r.paths ?? []); setPicked((p) => p.filter((x) => x !== q.id)); }, b.deleted)} className="rounded-lg px-2.5 py-1 text-gold-600 hover:bg-gold/10">{b.delete}</button>
                     )}
                   </div>
                 </li>

@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 import { exportAs, parseFile, TEMPLATES, type ExportQuestion, type ImportQuestion } from "../src/lib/exams/io";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own (set in main), so real data never changes the expected numbers
+let PMP = "";
+let CAPM = "";
 const results: { name: string; pass: boolean; info: string }[] = [];
 const ok = (name: string, pass: boolean, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
@@ -15,6 +16,8 @@ const users = { admin: u("admin"), inst: u("inst"), noImport: u("noimport"), noC
 type R = { value?: any; error?: string };
 
 async function main() {
+  const empty = (await db.$queryRawUnsafe('select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2')) as { id: string }[];
+  [PMP, CAPM] = empty.map((r) => r.id);
   try {
     await db.$transaction(
       async (tx) => {

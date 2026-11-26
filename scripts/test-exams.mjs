@@ -5,8 +5,8 @@ import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
 const db = new PrismaClient();
-const PMP = "cmwx44kbb0001gvkwzr4kyo1l";
-const CAPM = "cmwx44lbw0004gvkw5oretlpz";
+// two courses without questions of their own, so real data never changes the expected numbers
+const [PMP, CAPM] = (await db.$queryRawUnsafe(`select "id" from public."Program" p where not exists (select 1 from public."Question" q where q."programId"=p."id") order by p."order" limit 2`)).map((r) => r.id);
 const results = [];
 const ok = (name, pass, info = "") => results.push({ name, pass, info });
 const ROLLBACK = new Error("rollback");
@@ -16,6 +16,9 @@ const users = {
   instructor: { sub: randomUUID(), email: "t-instructor@phase1.test" },
   learner: { sub: randomUUID(), email: "t-learner@phase1.test" },
 };
+
+// what the same query finds before the test starts
+const [before] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase1.test') m, (select count(*)::int from public."Program" where "id"='t-phase1-course') p`);
 
 try {
   await db.$transaction(async (tx) => {
@@ -71,7 +74,7 @@ try {
     // 6. instructor: PMP only
     await as(users.instructor);
     r = await call("select public.exam_me()");
-    ok("Instructor → role INSTRUCTOR, only PMP, with permissions", r.value?.role === "INSTRUCTOR" && r.value.courses.length === 1 && r.value.courses[0].code === "PMP" && r.value.courses[0].permissions?.canPublishExams === true, JSON.stringify(r.value?.courses?.map((c) => c.code)));
+    ok("Instructor → role INSTRUCTOR, only the assigned course, with permissions", r.value?.role === "INSTRUCTOR" && r.value.courses.length === 1 && r.value.courses[0].programId === PMP && r.value.courses[0].permissions?.canPublishExams === true, JSON.stringify(r.value?.courses?.map((c) => c.code)));
     r = await call("select public.exam_course_folders($1)", PMP);
     ok("Instructor → 5 PMP folders incl. question bank", r.value?.length === 5 && r.value.some((f) => f.kind === "QUESTION_BANK"), `${r.value?.length} folders`);
     r = await call("select public.exam_course_folders($1)", CAPM);
@@ -86,7 +89,7 @@ try {
     // 7. learner: CAPM only, never the question bank
     await as(users.learner);
     r = await call("select public.exam_me()");
-    ok("Learner → only CAPM", r.value?.courses.length === 1 && r.value.courses[0].code === "CAPM" && r.value.courses[0].access === "LEARNER", JSON.stringify(r.value?.courses?.map((c) => c.code)));
+    ok("Learner → only the enrolled course", r.value?.courses.length === 1 && r.value.courses[0].programId === CAPM && r.value.courses[0].access === "LEARNER", JSON.stringify(r.value?.courses?.map((c) => c.code)));
     r = await call("select public.exam_course_folders($1)", CAPM);
     ok("Learner → 4 CAPM folders, no question bank", r.value?.length === 4 && !r.value.some((f) => f.kind === "QUESTION_BANK"), r.value?.map((f) => f.kind).join(","));
     r = await call("select public.exam_course_folders($1)", PMP);
@@ -142,7 +145,7 @@ try {
 }
 
 const [left] = await db.$queryRawUnsafe(`select (select count(*)::int from public."ExamMember" where "email" like '%@phase1.test') m, (select count(*)::int from public."Program" where "id"='t-phase1-course') p`);
-ok("Rollback: no test data left in the database", left.m === 0 && left.p === 0, JSON.stringify(left));
+ok("Rollback: no test data left in the database", JSON.stringify(left) === JSON.stringify(before), JSON.stringify({ before, left }));
 await db.$disconnect();
 
 for (const t of results) console.log(`${t.pass ? "✔" : "✗"} ${t.name}${t.pass ? "" : `  ← ${t.info}`}`);

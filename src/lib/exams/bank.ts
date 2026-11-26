@@ -212,7 +212,7 @@ export function bankErrorKey(e: unknown): string {
     if (/^right_min/.test(key)) return "right_min";
     return key;
   }
-  for (const k of ["category_in_use", "scenario_in_use", "forbidden", "not_found"]) if (msg.includes(k)) return k;
+  for (const k of ["category_in_use", "scenario_in_use", "question_in_exam", "question_in_attempt", "forbidden", "not_found"]) if (msg.includes(k)) return k;
   return "unknown";
 }
 
