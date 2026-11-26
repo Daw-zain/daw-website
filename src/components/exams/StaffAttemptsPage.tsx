@@ -9,6 +9,7 @@ import type { AttemptStatus, PublicQuestion, ReviewQuestion } from "@/lib/exams/
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { answerText } from "./AttemptReviewPage";
+import { HotspotAnswer } from "./AdvancedQuestions";
 
 type Row = { id: string; attemptNo: number; status: AttemptStatus; name: string; email: string; memberId: string; startedAt: string; submittedAt: string | null; score: number | null; maxScore: number | null; percent: number | null; passed: boolean | null; answeredCount: number; questionCount: number; needsManual: boolean; warnings: number };
 type List = { exam: { id: string; titleAr: string; titleEn: string; programId: string; folderId: string; resultsPolicy: string; resultsReleasedAt: string | null }; can: { grade: boolean; reopen: boolean; release: boolean }; attempts: Row[] };
@@ -181,6 +182,7 @@ function DetailPanel({ d, can, examId, locale, labels, onClose, onAct }: { d: De
                 <span className="font-semibold" dir="ltr">{shown === null ? "…" : `${Number(shown)} / ${Number(q.points)}`}</span>
               </div>
               <p className="mt-1 font-semibold leading-7 text-navy">{ar ? q.data.stemAr || q.data.stemEn : q.data.stemEn || q.data.stemAr}</p>
+              {q.type === "HOTSPOT" && <div className="mt-2"><HotspotAnswer data={q.data} response={q.response} regions={q.answer?.regions} labels={labels} /></div>}
               <p className="mt-2 text-sm"><b className="text-slate">{sa.response}:</b> <span className="whitespace-pre-line">{answerText(q, q.response, locale, labels) || "—"}</span></p>
               {q.type !== "ESSAY" && <p className="text-sm"><b className="text-emerald-700">{sa.correctAnswer}:</b> {answerText(q, q.answer, locale, labels)}</p>}
               {q.type === "ESSAY" && (

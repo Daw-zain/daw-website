@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { AssetRef, PublicQuestion, Response } from "@/lib/exams/attempt";
+import { AnswerInput } from "./AnswerInput";
+import { FigureView, HotspotAnswer } from "./AdvancedQuestions";
 import { rpc } from "@/lib/exams/client";
 import { stem, text, type ExamAsset, type Item, type QuestionFull, type ScenarioFull } from "@/lib/exams/bank";
 import type { ExamLabels } from "./ExamShell";
@@ -29,6 +32,8 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
   const unit = ar ? q.content.unitAr || q.content.unitEn : q.content.unitEn || q.content.unitAr;
   const [scenario, setScenario] = useState<{ s: ScenarioFull; images: Img[] } | null>(null);
   const [qImages, setQImages] = useState<Img[]>([]);
+  const [hotspot, setHotspot] = useState<AssetRef | null>(null);
+  const [resp, setResp] = useState<Response>(null);
 
   // case of the scenario (if any) + this question's own images, through signed URLs
   useEffect(() => {
@@ -39,13 +44,17 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
       rpc<ExamAsset[]>("exam_assets", { p_owner_type: "QUESTION", p_owner_id: q.id })
         .then(async (list) => {
           const urls = await signedUrls(list.map((a) => a.path));
-          if (live) setQImages(list.filter((a) => urls[a.path]).map((a) => ({ url: urls[a.path], caption: ar ? a.captionAr || a.captionEn : a.captionEn || a.captionAr, pdf: a.kind === "FILE" })));
+          // phase 10: a hotspot's first image is the picture to click, not a plain attachment
+          const first = q.type === "HOTSPOT" ? list.find((a) => a.kind === "IMAGE") : undefined;
+          if (!live) return;
+          setHotspot(first ? { path: first.path, kind: "IMAGE", captionAr: first.captionAr, captionEn: first.captionEn } : null);
+          setQImages(list.filter((a) => urls[a.path] && a !== first).map((a) => ({ url: urls[a.path], caption: ar ? a.captionAr || a.captionEn : a.captionEn || a.captionAr, pdf: a.kind === "FILE" })));
         })
         .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [q.scenarioId, q.id, locale, ar]);
+  }, [q.scenarioId, q.id, q.type, locale, ar]);
   const words = essay.trim() ? essay.trim().split(/\s+/).length : 0;
 
   const move = (i: number, d: -1 | 1) => {
@@ -84,7 +93,10 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
           ),
         )}
 
+        <FigureView figure={q.content.figure} locale={locale} labels={labels} />
+
         <div className="mt-4">
+          {(q.type === "HOTSPOT" || q.type === "DRAGDROP" || q.type === "CLOZE") && <AnswerInput data={toPublic(q, hotspot)} value={resp} onChange={setResp} locale={locale} labels={labels} />}
           {(q.type === "MCQ" || q.type === "MULTI") && (
             <ul className="space-y-2">
               {(q.content.options ?? []).map((o) => {
@@ -183,6 +195,23 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
   );
 }
 
+/** what a learner would receive for an advanced question (preview only — the real one comes from the server) */
+function toPublic(q: QuestionFull, hotspot: AssetRef | null): PublicQuestion {
+  return {
+    type: q.type,
+    stemAr: q.stemAr,
+    stemEn: q.stemEn,
+    images: [],
+    hotspot,
+    selectCount: q.answer.regions?.length ?? 0,
+    items: shuffled(q.content.items ?? []),
+    zones: q.content.zones,
+    textAr: q.content.textAr,
+    textEn: q.content.textEn,
+    blanks: q.content.blanks,
+  };
+}
+
 function AnswerKey({ q, locale, labels }: { q: QuestionFull; locale: string; labels: ExamLabels }) {
   const e = labels.bank.editor;
   const ar = locale === "ar";
@@ -217,6 +246,34 @@ function AnswerKey({ q, locale, labels }: { q: QuestionFull; locale: string; lab
               <li key={it.id}>{text(it, locale)}</li>
             ))}
           </ol>
+        )}
+        {q.type === "HOTSPOT" && <AnswerKeyHotspot q={q} labels={labels} />}
+        {q.type === "DRAGDROP" && (
+          <ul className="space-y-1">
+            {(q.content.zones ?? []).map((z) => (
+              <li key={z.id}>
+                <b>{text(z, locale)}:</b> {(q.content.items ?? []).filter((i) => q.answer.placements?.[i.id] === z.id).map((i) => text(i, locale)).join("، ") || "—"}
+              </li>
+            ))}
+            {(q.content.items ?? []).some((i) => !q.answer.placements?.[i.id]) && (
+              <li className="text-slate">
+                {e.distractor}: {(q.content.items ?? []).filter((i) => !q.answer.placements?.[i.id]).map((i) => text(i, locale)).join("، ")}
+              </li>
+            )}
+          </ul>
+        )}
+        {q.type === "CLOZE" && (
+          <ul className="space-y-1">
+            {(q.content.blanks ?? []).map((b) => {
+              const a = q.answer.blanks?.[b.id];
+              const o = b.options?.find((x) => x.id === a?.correct);
+              return (
+                <li key={b.id}>
+                  <b dir="ltr">[[{b.id}]]</b> {o ? text(o, locale) : (a?.accepted ?? []).filter((x) => x.trim()).join(" / ") || "—"}
+                </li>
+              );
+            })}
+          </ul>
         )}
         {q.type === "MATCHING" && (
           <ul className="space-y-1">
@@ -265,4 +322,22 @@ function AnswerKey({ q, locale, labels }: { q: QuestionFull; locale: string; lab
       )}
     </div>
   );
+}
+
+function AnswerKeyHotspot({ q, labels }: { q: QuestionFull; labels: ExamLabels }) {
+  const [ref, setRef] = useState<AssetRef | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (q.id)
+      rpc<ExamAsset[]>("exam_assets", { p_owner_type: "QUESTION", p_owner_id: q.id })
+        .then((list) => {
+          const f = list.find((a) => a.kind === "IMAGE");
+          if (live) setRef(f ? { path: f.path, kind: "IMAGE", captionAr: f.captionAr, captionEn: f.captionEn } : null);
+        })
+        .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [q.id]);
+  return <HotspotAnswer data={{ type: "HOTSPOT", stemAr: "", stemEn: "", images: [], hotspot: ref }} regions={q.answer.regions ?? []} labels={labels} />;
 }

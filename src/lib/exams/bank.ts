@@ -3,7 +3,7 @@
 /** Question bank (phase 3) — browser types and helpers. All reads/writes go through exam_bank_* functions. */
 import { ExamError } from "./client";
 
-export const QUESTION_TYPES = ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING", "MATCHING"] as const;
+export const QUESTION_TYPES = ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING", "MATCHING", "HOTSPOT", "DRAGDROP", "CLOZE"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 export type QStatus = "DRAFT" | "ACTIVE" | "DISABLED";
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
@@ -63,8 +63,22 @@ export type QuestionSummary = {
   scenarioId?: string | null;
 };
 
+// ── phase 10: advanced types + graphic-based questions ──
+/** hotspot area in % of the image (x, y = top-left corner) */
+export type Region = { id: string; x: number; y: number; w: number; h: number };
+export type ClozeBlank = { id: string; kind: "SELECT" | "TEXT"; options?: Item[] };
+export const FIGURE_KINDS = ["TABLE", "BAR", "LINE", "PIE"] as const;
+export type FigureKind = (typeof FIGURE_KINDS)[number];
+/** a table or chart attached to any question; rows[0] = header, charts: column 1 = labels, other columns = numbers */
+export type Figure = { kind: FigureKind; captionAr: string; captionEn: string; rows: string[][] };
+
 export type QuestionContent = {
   options?: Item[];
+  zones?: Item[];
+  textAr?: string;
+  textEn?: string;
+  blanks?: ClozeBlank[];
+  figure?: Figure;
   items?: Item[];
   left?: Item[];
   right?: Item[];
@@ -84,6 +98,9 @@ export type QuestionAnswer = {
   rubricEn?: string;
   order?: string[];
   pairs?: Record<string, string>;
+  regions?: Region[];
+  placements?: Record<string, string>;
+  blanks?: Record<string, { correct?: string; accepted?: string[]; caseSensitive?: boolean }>;
 };
 
 export type QuestionFull = Omit<QuestionSummary, "updatedAt"> & {
@@ -147,6 +164,12 @@ export function blankQuestion(type: QuestionType): QuestionFull {
       return { ...base, content: { items: items(3) }, answer: {} };
     case "MATCHING":
       return { ...base, content: { left: items(3), right: items(3) }, answer: { pairs: {} } };
+    case "HOTSPOT":
+      return { ...base, content: {}, answer: { regions: [] } };
+    case "DRAGDROP":
+      return { ...base, content: { items: items(3), zones: items(2) }, answer: { placements: {} } };
+    case "CLOZE":
+      return { ...base, content: { textAr: "", textEn: "", blanks: [] }, answer: { blanks: {} } };
   }
 }
 

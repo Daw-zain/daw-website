@@ -47,7 +47,27 @@ begin
     v := v || jsonb_build_object(
       'left', case when p_shuffle_options then (select jsonb_agg(o order by random()) from jsonb_array_elements(c -> 'left') o) else c -> 'left' end,
       'right', (select jsonb_agg(o order by random()) from jsonb_array_elements(c -> 'right') o));
+  -- ── phase 10 ──
+  elsif t = 'HOTSPOT' then
+    -- the first image is the picture to click; the areas (answer) are never sent, only how many to mark
+    v := v || jsonb_build_object(
+      'selectCount', jsonb_array_length(p_snap -> 'answer' -> 'regions'),
+      'hotspot', (select x from jsonb_array_elements(coalesce(p_images, '[]'::jsonb)) with ordinality t(x, n) where x ->> 'kind' = 'IMAGE' order by n limit 1),
+      'images', coalesce((select jsonb_agg(x order by n) from jsonb_array_elements(coalesce(p_images, '[]'::jsonb)) with ordinality t(x, n)
+                 where n <> coalesce((select n2 from jsonb_array_elements(coalesce(p_images, '[]'::jsonb)) with ordinality t2(x2, n2) where x2 ->> 'kind' = 'IMAGE' order by n2 limit 1), 0)), '[]'::jsonb));
+  elsif t = 'DRAGDROP' then
+    v := v || jsonb_build_object(
+      'items', (select jsonb_agg(o order by random()) from jsonb_array_elements(c -> 'items') o),
+      'zones', case when p_shuffle_options then (select jsonb_agg(o order by random()) from jsonb_array_elements(c -> 'zones') o) else c -> 'zones' end);
+  elsif t = 'CLOZE' then
+    v := v || jsonb_build_object('textAr', c ->> 'textAr', 'textEn', c ->> 'textEn',
+      'blanks', (select jsonb_agg(case when b ->> 'kind' = 'SELECT' and p_shuffle_options
+                   then b || jsonb_build_object('options', (select jsonb_agg(o order by random()) from jsonb_array_elements(b -> 'options') o))
+                   else b end order by n)
+                 from jsonb_array_elements(c -> 'blanks') with ordinality t(b, n)));
   end if;
+  -- graphic-based: a table / chart attached to any type
+  if c ? 'figure' then v := v || jsonb_build_object('figure', c -> 'figure'); end if;
   return v;
 end $$;
 
@@ -134,6 +154,54 @@ begin
     if ok = n then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
     if mode = 'PARTIAL' then return jsonb_build_object('score', round(p_max * ok / n, 2), 'correct', false, 'manual', false); end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
+
+  -- ── phase 10 ──
+  elsif t in ('HOTSPOT', 'DRAGDROP') then
+    if t = 'HOTSPOT' then
+      -- an area counts once it holds at least one mark; a mark outside every area is a wrong mark
+      n := jsonb_array_length(a -> 'regions');
+      hits := (select count(*) from jsonb_array_elements(a -> 'regions') g where exists (
+                select 1 from jsonb_array_elements(coalesce(r -> 'points', '[]'::jsonb)) p
+                where (p ->> 'x')::numeric between (g ->> 'x')::numeric and (g ->> 'x')::numeric + (g ->> 'w')::numeric
+                  and (p ->> 'y')::numeric between (g ->> 'y')::numeric and (g ->> 'y')::numeric + (g ->> 'h')::numeric));
+      ok := jsonb_array_length(coalesce(r -> 'points', '[]'::jsonb));
+      wrongs := (select count(*) from jsonb_array_elements(coalesce(r -> 'points', '[]'::jsonb)) p where not exists (
+                select 1 from jsonb_array_elements(a -> 'regions') g
+                where (p ->> 'x')::numeric between (g ->> 'x')::numeric and (g ->> 'x')::numeric + (g ->> 'w')::numeric
+                  and (p ->> 'y')::numeric between (g ->> 'y')::numeric and (g ->> 'y')::numeric + (g ->> 'h')::numeric));
+    else
+      -- every item that belongs in a zone must be there; a distractor placed anywhere, or an item in the wrong zone, is wrong
+      n := (select count(*) from jsonb_object_keys(a -> 'placements'));
+      hits := (select count(*) from jsonb_each_text(a -> 'placements') e where (r -> 'place' ->> e.key) = e.value);
+      ok := (select count(*) from jsonb_each_text(coalesce(r -> 'place', '{}'::jsonb)) e where e.value is not null);
+      wrongs := ok - hits;
+    end if;
+    if hits = n and wrongs = 0 then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
+    if mode = 'PARTIAL' then
+      return jsonb_build_object('score', round(p_max * hits / greatest(n, ok), 2), 'correct', false, 'manual', false);
+    elsif mode = 'PARTIAL_PENALTY' then
+      return jsonb_build_object('score', round(p_max * greatest(hits - wrongs, 0) / n, 2), 'correct', false, 'manual', false);
+    end if;
+    return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
+
+  elsif t = 'CLOZE' then
+    n := 0; ok := 0;
+    for k in select jsonb_object_keys(a -> 'blanks') loop
+      n := n + 1;
+      txt := regexp_replace(trim(coalesce(r -> 'blanks' ->> k, '')), '\s+', ' ', 'g');
+      if a -> 'blanks' -> k ? 'correct' then
+        if txt = (a -> 'blanks' -> k ->> 'correct') then ok := ok + 1; end if;
+      elsif txt <> '' and exists (
+          select 1 from jsonb_array_elements_text(a -> 'blanks' -> k -> 'accepted') x
+          where case when coalesce((a -> 'blanks' -> k ->> 'caseSensitive')::boolean, false)
+                     then regexp_replace(trim(x), '\s+', ' ', 'g') = txt
+                     else lower(regexp_replace(trim(x), '\s+', ' ', 'g')) = lower(txt) end) then
+        ok := ok + 1;
+      end if;
+    end loop;
+    if n > 0 and ok = n then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
+    if mode = 'PARTIAL' and n > 0 then return jsonb_build_object('score', round(p_max * ok / n, 2), 'correct', false, 'manual', false); end if;
+    return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
   end if;
   return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
 end $$;
@@ -170,6 +238,31 @@ begin
     for k in select jsonb_object_keys(p_resp -> 'pairs') loop
       if not exists (select 1 from jsonb_array_elements(p_pub -> 'left') l where l ->> 'id' = k) then return false; end if;
       if not ((p_resp -> 'pairs' ->> k) = any(ids)) then return false; end if;
+    end loop;
+    return true;
+  -- ── phase 10 ──
+  elsif t = 'HOTSPOT' then
+    if coalesce(jsonb_typeof(p_resp -> 'points'), '') <> 'array' then return false; end if;
+    if jsonb_array_length(p_resp -> 'points') < 1 or jsonb_array_length(p_resp -> 'points') > coalesce((p_pub ->> 'selectCount')::int, 1) then return false; end if;
+    return not exists (select 1 from jsonb_array_elements(p_resp -> 'points') p
+      where jsonb_typeof(p) <> 'object' or coalesce(jsonb_typeof(p -> 'x'), '') <> 'number' or coalesce(jsonb_typeof(p -> 'y'), '') <> 'number'
+         or (p ->> 'x')::numeric not between 0 and 100 or (p ->> 'y')::numeric not between 0 and 100);
+  elsif t = 'DRAGDROP' then
+    if coalesce(jsonb_typeof(p_resp -> 'place'), '') <> 'object' then return false; end if;
+    select array_agg(o ->> 'id') into ids from jsonb_array_elements(p_pub -> 'zones') o;
+    for k in select jsonb_object_keys(p_resp -> 'place') loop
+      if not exists (select 1 from jsonb_array_elements(p_pub -> 'items') l where l ->> 'id' = k) then return false; end if;
+      if coalesce(jsonb_typeof(p_resp -> 'place' -> k), '') <> 'string' or not ((p_resp -> 'place' ->> k) = any(ids)) then return false; end if;
+    end loop;
+    return true;
+  elsif t = 'CLOZE' then
+    if coalesce(jsonb_typeof(p_resp -> 'blanks'), '') <> 'object' then return false; end if;
+    for k in select jsonb_object_keys(p_resp -> 'blanks') loop
+      if coalesce(jsonb_typeof(p_resp -> 'blanks' -> k), '') <> 'string' or length(p_resp -> 'blanks' ->> k) > 200 then return false; end if;
+      if not exists (select 1 from jsonb_array_elements(p_pub -> 'blanks') b where b ->> 'id' = k
+          and (b ->> 'kind' = 'TEXT' or exists (select 1 from jsonb_array_elements(b -> 'options') o where o ->> 'id' = p_resp -> 'blanks' ->> k))) then
+        return false;
+      end if;
     end loop;
     return true;
   end if;

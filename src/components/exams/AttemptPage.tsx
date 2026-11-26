@@ -12,7 +12,7 @@ import { AnswerInput, AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { Calculator, FloatingPanel, Whiteboard } from "./ExamTools";
 import { proctorSuppressed, type ProctorKind, type ProctorResult } from "@/lib/exams/proctor";
 
-const TEXT_TYPES = new Set(["SHORT", "ESSAY", "NUMERIC"]);
+const TEXT_TYPES = new Set(["SHORT", "ESSAY", "NUMERIC", "CLOZE"]);
 
 /** /[locale]/exams/attempt?id=… — taking the exam. The server owns time, answers and grading. */
 export function AttemptPage(props: { locale: string; labels: ExamLabels; homeLabel?: string }) {
@@ -128,7 +128,8 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
         onCut: (e: React.ClipboardEvent) => { e.preventDefault(); setBlockedNote(true); report("COPY"); },
         onPaste: (e: React.ClipboardEvent) => { e.preventDefault(); setBlockedNote(true); report("PASTE"); },
         onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); report("CONTEXT_MENU"); },
-        onDragStart: (e: React.DragEvent) => e.preventDefault(),
+        // drag & drop questions mark their own draggable parts with data-dnd
+        onDragStart: (e: React.DragEvent) => { if (!(e.target as HTMLElement).closest?.("[data-dnd]")) e.preventDefault(); },
       }
     : {};
   const toggleFs = () => {
@@ -287,7 +288,7 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
               </div>
               {cl === "en" && <p className="mt-2 rounded-lg bg-brand/5 px-3 py-1.5 text-xs text-brand">{q.data.stemEn ? tl.translatedNote : tl.noEnglish}</p>}
               <p className="mt-3 whitespace-pre-line text-[17px] font-semibold leading-8 text-navy" dir={cl === "en" && q.data.stemEn ? "ltr" : "rtl"} lang={cl === "en" && q.data.stemEn ? "en" : "ar"}>{cl === "ar" ? q.data.stemAr || q.data.stemEn : q.data.stemEn || q.data.stemAr}</p>
-              <QuestionMedia assets={q.data.images} locale={cl} />
+              <QuestionMedia assets={q.data.images} figure={q.data.figure} locale={cl} labels={labels} />
               <div className="mt-5" dir={cl === "en" && q.data.stemEn ? "ltr" : undefined}>
                 <AnswerInput
                   key={q.id}

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { AnswerInput, AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { answerText } from "./AttemptReviewPage";
+import { HotspotAnswer } from "./AdvancedQuestions";
 
 /** /[locale]/exams/mistakes?id=<programId> — my mistakes, review sessions, and (staff) the course report */
 export function ExamMistakesPage(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -293,7 +294,8 @@ function Detail({ id, locale, labels, onSeen }: { id: string; locale: string; la
     <div className="mt-4 border-t border-line pt-4">
       {d.scenario && <div className="mb-3 rounded-2xl border border-brand/20 bg-white p-4"><AttemptScenarioView s={d.scenario} locale={locale} labels={labels} /></div>}
       <p className="whitespace-pre-line font-semibold leading-8 text-navy">{ar ? d.data.stemAr || d.data.stemEn : d.data.stemEn || d.data.stemAr}</p>
-      <QuestionMedia assets={d.data.images} locale={locale} />
+      <QuestionMedia assets={d.data.images} figure={d.data.figure} locale={locale} labels={labels} />
+      {d.data.type === "HOTSPOT" && <div className="mt-3"><HotspotAnswer data={d.data} response={d.lastResponse} regions={d.reveal?.answer?.regions} labels={labels} /></div>}
       <div className="mt-3 text-sm leading-7">
         <p className="font-semibold text-gold-600">{mk.yourLastAnswer}</p>
         <p className="whitespace-pre-line">{answerText(d, d.lastResponse, locale, labels) || "—"}</p>
@@ -412,7 +414,7 @@ function SessionView({ id, locale, labels, onClose }: { id: string; locale: stri
           <p className="text-sm text-slate">{labels.attempt.question} {idx + 1} / {s.questionCount}</p>
           {q.data.scenario && <div className="my-3 rounded-2xl border border-brand/20 bg-white p-4"><AttemptScenarioView s={q.data.scenario} locale={locale} labels={labels} /></div>}
           <p className="mt-2 whitespace-pre-line font-semibold leading-8 text-navy">{ar ? q.data.stemAr || q.data.stemEn : q.data.stemEn || q.data.stemAr}</p>
-          <QuestionMedia assets={q.data.images} locale={locale} />
+          <QuestionMedia assets={q.data.images} figure={q.data.figure} locale={locale} labels={labels} />
           <div className="mt-4">
             <AnswerInput data={q.data} value={draft[q.id] ?? null} onChange={(r) => setDraft({ ...draft, [q.id]: r })} locale={locale} labels={labels} disabled={busy} />
           </div>
@@ -447,7 +449,8 @@ function SessionCard({ q, n, total, locale, labels, showReveal }: { q: MistakeSe
       </div>
       {q.data.scenario && <div className="my-3 rounded-2xl border border-brand/20 bg-white p-4"><AttemptScenarioView s={q.data.scenario} locale={locale} labels={labels} /></div>}
       <p className="mt-2 whitespace-pre-line font-semibold leading-8 text-navy">{ar ? q.data.stemAr || q.data.stemEn : q.data.stemEn || q.data.stemAr}</p>
-      <QuestionMedia assets={q.data.images} locale={locale} />
+      <QuestionMedia assets={q.data.images} figure={q.data.figure} locale={locale} labels={labels} />
+      {q.data.type === "HOTSPOT" && <div className="mt-3"><HotspotAnswer data={q.data} response={q.response} regions={showReveal ? q.reveal?.answer?.regions : undefined} labels={labels} /></div>}
       <div className="mt-3 text-sm leading-7">
         <p className="font-semibold text-slate">{labels.review.yourAnswer}</p>
         <p className="whitespace-pre-line">{answerText(q, q.response, locale, labels) || <span className="text-slate">{labels.review.notAnswered}</span>}</p>

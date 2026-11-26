@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import type { ExamLabels } from "./ExamShell";
 import { signedUrls } from "./AssetManager";
 import { ScenarioView } from "./BankScenarios";
+import { ClozeInput, DragDropInput, FigureView, HotspotInput } from "./AdvancedQuestions";
+import type { Figure } from "@/lib/exams/bank";
 
 /** Images / PDFs of a question or scenario through short-lived signed URLs (storage policy decides access) */
 export function useSigned(assets: AssetRef[] | undefined, locale: string) {
@@ -27,10 +29,11 @@ export function useSigned(assets: AssetRef[] | undefined, locale: string) {
   return out;
 }
 
-export function QuestionMedia({ assets, locale }: { assets: AssetRef[] | undefined; locale: string }) {
+export function QuestionMedia({ assets, figure, locale, labels }: { assets: AssetRef[] | undefined; figure?: Figure | null; locale: string; labels?: ExamLabels }) {
   const media = useSigned(assets, locale);
   return (
     <>
+      {figure && labels && <FigureView figure={figure} locale={locale} labels={labels} />}
       {media.map((m, i) =>
         m.pdf ? (
           <a key={i} href={m.url} target="_blank" rel="noopener" className="mt-3 inline-flex rounded-lg bg-mist px-3 py-2 text-sm font-semibold text-brand">PDF · {m.caption || "↗"}</a>
@@ -177,6 +180,12 @@ export function AnswerInput({ data, value, onChange, locale, labels, disabled }:
           ))}
         </ul>
       );
+    case "HOTSPOT":
+      return <HotspotInput data={data} value={value} onChange={onChange} disabled={disabled} locale={locale} labels={labels} />;
+    case "DRAGDROP":
+      return <DragDropInput data={data} value={value} onChange={onChange} disabled={disabled} locale={locale} labels={labels} />;
+    case "CLOZE":
+      return <ClozeInput data={data} value={value} onChange={onChange} disabled={disabled} locale={locale} labels={labels} />;
   }
   return null;
 }

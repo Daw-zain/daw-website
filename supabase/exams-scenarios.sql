@@ -351,6 +351,12 @@ begin
   select * into a from public."ExamAsset" where "id" = p_id;
   if a."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   perform public.exam_require_perm(a."programId", case when a."ownerType" = 'SCENARIO' then 'canManageScenarios' else 'canEditQuestions' end);
+  -- phase 10: an ACTIVE hotspot question keeps at least one image (its clickable picture)
+  if a."ownerType" = 'QUESTION' and a."kind" = 'IMAGE'
+     and exists (select 1 from public."Question" where "id" = a."ownerId" and "type" = 'HOTSPOT' and "status" = 'ACTIVE')
+     and not exists (select 1 from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = a."ownerId" and "kind" = 'IMAGE' and "id" <> p_id) then
+    raise exception 'invalid_asset: hotspot_image_needed';
+  end if;
   delete from public."ExamAsset" where "id" = p_id;
   perform public.exam_log('asset.delete', 'ExamAsset', p_id, a."programId", jsonb_build_object('path', a."path"));
   return jsonb_build_object('deleted', p_id, 'path', a."path");

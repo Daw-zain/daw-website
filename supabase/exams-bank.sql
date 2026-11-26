@@ -83,6 +83,7 @@ declare
   s jsonb := coalesce(p_scoring, '{}'::jsonb);
   opts jsonb; lft jsonb; rgt jsonb; ids text[]; rids text[]; sel text[]; v_mode text; k text; v text; used text[] := '{}';
   v_num numeric; v_tol numeric; v_acc jsonb; v_min int; v_max int;
+  v_r jsonb; v_i bigint; v_tar text; v_ten text;
 begin
   v_mode := coalesce(nullif(s ->> 'mode', ''), 'ALL_OR_NOTHING');
 
@@ -166,10 +167,150 @@ begin
       'answer', jsonb_build_object('pairs', (select jsonb_object_agg(x, a -> 'pairs' ->> x) from unnest(ids) x)),
       'scoring', jsonb_build_object('mode', v_mode));
 
+  -- ── phase 10: advanced types ──
+  when 'HOTSPOT' then
+    -- correct areas on the question's first image, as % of its width/height (secret: they ARE the answer)
+    if coalesce(jsonb_typeof(a -> 'regions'), '') <> 'array' or jsonb_array_length(a -> 'regions') = 0 then raise exception 'invalid_question: hotspot_regions_missing'; end if;
+    if jsonb_array_length(a -> 'regions') > 10 then raise exception 'invalid_question: hotspot_regions_max_10'; end if;
+    v_acc := '[]'::jsonb; ids := '{}';
+    for v_r, v_i in select x, n from jsonb_array_elements(a -> 'regions') with ordinality t(x, n) loop
+      k := coalesce(nullif(trim(v_r ->> 'id'), ''), 'r' || v_i::text);
+      if k !~ '^[A-Za-z0-9_-]{1,40}$' or k = any(ids) then raise exception 'invalid_question: hotspot_region_bad'; end if;
+      if jsonb_typeof(v_r -> 'x') <> 'number' or jsonb_typeof(v_r -> 'y') <> 'number' or jsonb_typeof(v_r -> 'w') <> 'number' or jsonb_typeof(v_r -> 'h') <> 'number' then
+        raise exception 'invalid_question: hotspot_region_bad';
+      end if;
+      if (v_r ->> 'x')::numeric < 0 or (v_r ->> 'y')::numeric < 0 or (v_r ->> 'w')::numeric < 1 or (v_r ->> 'h')::numeric < 1
+         or (v_r ->> 'x')::numeric + (v_r ->> 'w')::numeric > 100.01 or (v_r ->> 'y')::numeric + (v_r ->> 'h')::numeric > 100.01 then
+        raise exception 'invalid_question: hotspot_region_bad';
+      end if;
+      ids := ids || k;
+      v_acc := v_acc || jsonb_build_array(jsonb_build_object('id', k,
+        'x', round((v_r ->> 'x')::numeric, 2), 'y', round((v_r ->> 'y')::numeric, 2), 'w', round((v_r ->> 'w')::numeric, 2), 'h', round((v_r ->> 'h')::numeric, 2)));
+    end loop;
+    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL', 'PARTIAL_PENALTY') then raise exception 'invalid_question: scoring_mode'; end if;
+    return jsonb_build_object('content', '{}'::jsonb, 'answer', jsonb_build_object('regions', v_acc), 'scoring', jsonb_build_object('mode', v_mode));
+
+  when 'DRAGDROP' then
+    -- items are dropped into zones; a zone may take several items; items with no zone are distractors
+    opts := public.exam_bank_list(c -> 'items', 2, 'items');
+    rgt := public.exam_bank_list(c -> 'zones', 1, 'zones');
+    if jsonb_array_length(rgt) > 10 then raise exception 'invalid_question: zones_max_10'; end if;
+    select array_agg(o ->> 'id') into ids from jsonb_array_elements(opts) o;
+    select array_agg(o ->> 'id') into rids from jsonb_array_elements(rgt) o;
+    if coalesce(jsonb_typeof(a -> 'placements'), '') <> 'object' then raise exception 'invalid_question: placements_missing'; end if;
+    for k, v in select key, value #>> '{}' from jsonb_each(a -> 'placements') loop
+      if not k = any(ids) then raise exception 'invalid_question: placements_unknown_item'; end if;
+      if v is null or not v = any(rids) then raise exception 'invalid_question: placements_unknown_zone'; end if;
+    end loop;
+    if not exists (select 1 from jsonb_object_keys(a -> 'placements')) then raise exception 'invalid_question: placements_missing'; end if;
+    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL', 'PARTIAL_PENALTY') then raise exception 'invalid_question: scoring_mode'; end if;
+    return jsonb_build_object(
+      'content', jsonb_build_object('items', opts, 'zones', rgt),
+      'answer', jsonb_build_object('placements', a -> 'placements'),
+      'scoring', jsonb_build_object('mode', v_mode));
+
+  when 'CLOZE' then
+    -- a passage with [[id]] markers; each marker is a drop-down (SELECT) or a typed answer (TEXT)
+    v_tar := trim(coalesce(c ->> 'textAr', ''));
+    v_ten := trim(coalesce(c ->> 'textEn', ''));
+    if v_tar = '' and v_ten = '' then raise exception 'invalid_question: cloze_text_missing'; end if;
+    if char_length(v_tar) > 10000 or char_length(v_ten) > 10000 then raise exception 'invalid_question: cloze_text_too_long'; end if;
+    if coalesce(jsonb_typeof(c -> 'blanks'), '') <> 'array' or jsonb_array_length(c -> 'blanks') = 0 then raise exception 'invalid_question: cloze_blanks_missing'; end if;
+    if jsonb_array_length(c -> 'blanks') > 20 then raise exception 'invalid_question: cloze_blanks_max_20'; end if;
+    v_acc := '[]'::jsonb; lft := '{}'::jsonb; ids := '{}';
+    for v_r in select x from jsonb_array_elements(c -> 'blanks') x loop
+      k := trim(coalesce(v_r ->> 'id', ''));
+      if k !~ '^[A-Za-z0-9_-]{1,20}$' or k = any(ids) then raise exception 'invalid_question: cloze_blank_id'; end if;
+      ids := ids || k;
+      for v in select unnest(array[v_tar, v_ten]) loop
+        if v <> '' and (char_length(v) - char_length(replace(v, '[[' || k || ']]', ''))) / char_length('[[' || k || ']]') <> 1 then
+          raise exception 'invalid_question: cloze_marker_missing';
+        end if;
+      end loop;
+      if v_r ->> 'kind' = 'SELECT' then
+        opts := public.exam_bank_list(v_r -> 'options', 2, 'options');
+        v := a -> 'blanks' -> k ->> 'correct';
+        if v is null or not exists (select 1 from jsonb_array_elements(opts) o where o ->> 'id' = v) then raise exception 'invalid_question: cloze_blank_answer'; end if;
+        v_acc := v_acc || jsonb_build_array(jsonb_build_object('id', k, 'kind', 'SELECT', 'options', opts));
+        lft := lft || jsonb_build_object(k, jsonb_build_object('correct', v));
+      elsif v_r ->> 'kind' = 'TEXT' then
+        select jsonb_agg(trim(x)) into rgt from jsonb_array_elements_text(coalesce(a -> 'blanks' -> k -> 'accepted', '[]'::jsonb)) x where trim(x) <> '';
+        if rgt is null then raise exception 'invalid_question: cloze_blank_answer'; end if;
+        if jsonb_array_length(rgt) > 20 then raise exception 'invalid_question: short_accepted_max_20'; end if;
+        v_acc := v_acc || jsonb_build_array(jsonb_build_object('id', k, 'kind', 'TEXT'));
+        lft := lft || jsonb_build_object(k, jsonb_build_object('accepted', rgt, 'caseSensitive', coalesce((a -> 'blanks' -> k ->> 'caseSensitive')::boolean, false)));
+      else
+        raise exception 'invalid_question: cloze_blank_kind';
+      end if;
+    end loop;
+    -- no stray markers that point at nothing
+    if exists (select 1 from regexp_matches(v_tar || ' ' || v_ten, '\[\[([^\]]*)\]\]', 'g') m where not m[1] = any(ids)) then
+      raise exception 'invalid_question: cloze_marker_unknown';
+    end if;
+    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL') then raise exception 'invalid_question: scoring_mode'; end if;
+    return jsonb_build_object(
+      'content', jsonb_build_object('textAr', v_tar, 'textEn', v_ten, 'blanks', v_acc),
+      'answer', jsonb_build_object('blanks', lft),
+      'scoring', jsonb_build_object('mode', v_mode));
+
   else
     raise exception 'invalid_question: unknown_type';
   end case;
 end $$;
+
+-- ── phase 10: graphic-based questions — an optional table or chart (bar / line / pie) on any question.
+-- rows[0] is the header; for charts column 1 holds the labels and the other columns numbers (series).
+create or replace function public.exam_bank_figure(p jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare v_kind text; v_rows jsonb := '[]'::jsonb; r jsonb; v_cols int; i int := 0; cell text; v_row jsonb;
+begin
+  if p is null or p = 'null'::jsonb then return null; end if;
+  if jsonb_typeof(p) <> 'object' then raise exception 'invalid_question: figure_bad'; end if;
+  v_kind := coalesce(p ->> 'kind', 'TABLE');
+  if v_kind not in ('TABLE', 'BAR', 'LINE', 'PIE') then raise exception 'invalid_question: figure_kind'; end if;
+  if coalesce(jsonb_typeof(p -> 'rows'), '') <> 'array' or jsonb_array_length(p -> 'rows') < 2 or jsonb_array_length(p -> 'rows') > 31 then
+    raise exception 'invalid_question: figure_rows';
+  end if;
+  for r in select x from jsonb_array_elements(p -> 'rows') x loop
+    i := i + 1;
+    if jsonb_typeof(r) <> 'array' then raise exception 'invalid_question: figure_columns'; end if;
+    if v_cols is null then v_cols := jsonb_array_length(r); end if;
+    if jsonb_array_length(r) <> v_cols or v_cols < 2 or v_cols > 10 then raise exception 'invalid_question: figure_columns'; end if;
+    v_row := '[]'::jsonb;
+    for cell in select trim(coalesce(x #>> '{}', '')) from jsonb_array_elements(r) x loop
+      if char_length(cell) > 200 then raise exception 'invalid_question: figure_cell_too_long'; end if;
+      v_row := v_row || to_jsonb(cell);
+    end loop;
+    v_rows := v_rows || jsonb_build_array(v_row);
+  end loop;
+  if v_kind <> 'TABLE' and exists (
+      select 1 from jsonb_array_elements(v_rows) with ordinality t(rw, n), jsonb_array_elements_text(rw) with ordinality c(v, m)
+      where n > 1 and m > 1 and v !~ '^-?\d+(\.\d+)?$') then
+    raise exception 'invalid_question: figure_not_numeric';
+  end if;
+  if v_kind = 'PIE' and exists (
+      select 1 from jsonb_array_elements(v_rows) with ordinality t(rw, n) where n > 1 and (rw ->> 1)::numeric < 0) then
+    raise exception 'invalid_question: figure_not_numeric';
+  end if;
+  return jsonb_build_object('kind', v_kind,
+    'captionAr', left(trim(coalesce(p ->> 'captionAr', '')), 300), 'captionEn', left(trim(coalesce(p ->> 'captionEn', '')), 300),
+    'rows', v_rows);
+end $$;
+
+-- an ACTIVE hotspot question needs its image (the first image attachment)
+create or replace function public.exam_bank_hotspot_ready(p_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id and "kind" = 'IMAGE')
+$$;
 
 -- full question (public parts + secret) as JSON, for staff screens and version snapshots
 create or replace function public.exam_bank_question_json(p_id text)
@@ -375,7 +516,7 @@ declare
   v_top text := nullif(p_q ->> 'topicId', '');
   v_sub text := nullif(p_q ->> 'subtopicId', '');
   v_kw text[]; norm jsonb; cat public."QuestionCategory"; cur public."Question"; v_version int;
-  v_scn text := nullif(p_q ->> 'scenarioId', ''); v_scn_order int;
+  v_scn text := nullif(p_q ->> 'scenarioId', ''); v_scn_order int; v_fig jsonb;
 begin
   -- common fields
   if v_ar = '' and v_en = '' then raise exception 'invalid_question: stem_missing'; end if;
@@ -412,6 +553,9 @@ begin
   end if;
 
   norm := public.exam_bank_validate(v_type, p_q -> 'content', p_q -> 'answer', p_q -> 'scoring');
+  -- phase 10: optional table / chart for any type
+  v_fig := public.exam_bank_figure(p_q -> 'content' -> 'figure');
+  if v_fig is not null then norm := jsonb_set(norm, '{content}', coalesce(norm -> 'content', '{}'::jsonb) || jsonb_build_object('figure', v_fig)); end if;
 
   if v_id is null then
     v_scn_order := case when v_scn is null then 0 else (select coalesce(max("scenarioOrder"), 0) + 1 from public."Question" where "scenarioId" = v_scn) end;
@@ -443,6 +587,11 @@ begin
     "feedbackAr" = excluded."feedbackAr", "feedbackEn" = excluded."feedbackEn",
     "explanationAr" = excluded."explanationAr", "explanationEn" = excluded."explanationEn",
     "optionRationale" = excluded."optionRationale", "updatedAt" = now();
+
+  -- phase 10: a hotspot can only go ACTIVE once its image is attached (save it as a draft first)
+  if v_type = 'HOTSPOT' and v_status = 'ACTIVE' and not public.exam_bank_hotspot_ready(v_id) then
+    raise exception 'invalid_question: hotspot_image_missing';
+  end if;
 
   insert into public."QuestionVersion" ("questionId", "version", "snapshot", "createdById")
   values (v_id, v_version, public.exam_bank_question_json(v_id), me."id");
@@ -479,6 +628,9 @@ begin
   select "programId" into v_program from public."Question" where "id" = p_id;
   if v_program is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   me := public.exam_require_perm(v_program, 'canEditQuestions');
+  if p_status = 'ACTIVE' and (select "type" from public."Question" where "id" = p_id) = 'HOTSPOT' and not public.exam_bank_hotspot_ready(p_id) then
+    raise exception 'invalid_question: hotspot_image_missing';
+  end if;
   update public."Question" set "status" = p_status, "updatedById" = me."id", "updatedAt" = now() where "id" = p_id;
   perform public.exam_log('question.status', 'Question', p_id, v_program, jsonb_build_object('status', p_status));
   return jsonb_build_object('id', p_id, 'status', p_status);
@@ -527,6 +679,8 @@ revoke all on function public.exam_is_course_staff(text) from public, anon, auth
 revoke all on function public.exam_require_perm(text, text) from public, anon, authenticated;
 revoke all on function public.exam_bank_list(jsonb, int, text) from public, anon, authenticated;
 revoke all on function public.exam_bank_validate(text, jsonb, jsonb, jsonb) from public, anon, authenticated;
+revoke all on function public.exam_bank_figure(jsonb) from public, anon, authenticated;
+revoke all on function public.exam_bank_hotspot_ready(text) from public, anon, authenticated;
 revoke all on function public.exam_bank_question_json(text) from public, anon, authenticated;
 
 revoke all on function public.exam_bank_overview(text) from public, anon;

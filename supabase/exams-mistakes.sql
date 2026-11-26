@@ -272,12 +272,13 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare s public."MistakeSession"; q public."MistakeSessionQuestion"; m public."MistakeItem"; v_need int := public.exam_mastery_streak(); v_ok int := 0;
+declare s public."MistakeSession"; q public."MistakeSessionQuestion"; m public."MistakeItem"; v_need int := public.exam_mastery_streak(); v_ok int := 0; v_was text;
 begin
   select * into s from public."MistakeSession" where "id" = p_session for update;
   if s."status" <> 'IN_PROGRESS' then return; end if;
   for q in select * from public."MistakeSessionQuestion" where "sessionId" = p_session and "isCorrect" is not null loop
     select * into m from public."MistakeItem" where "id" = q."mistakeId";
+    v_was := m."status";
     if q."isCorrect" then
       v_ok := v_ok + 1;
       update public."MistakeItem" set "reviewCorrect" = "reviewCorrect" + 1, "correctStreak" = "correctStreak" + 1, "lastReviewedAt" = now(),
@@ -285,7 +286,9 @@ begin
         "masteredAt" = case when "correctStreak" + 1 >= v_need then coalesce("masteredAt", now()) end, "updatedAt" = now()
       where "id" = m."id" returning * into m;
       insert into public."MistakeHistory" ("mistakeId", "kind", "sessionId", "response") values (m."id", 'REVIEW_CORRECT', p_session, q."response");
-      if m."status" = 'MASTERED' and m."masteredAt" >= now() then
+      -- just reached mastery (compare statuses: "masteredAt" is stored at millisecond precision, so a
+      -- time comparison with now() failed about half the time — caught by the phase 10 regression run)
+      if m."status" = 'MASTERED' and v_was is distinct from 'MASTERED' then
         insert into public."MistakeHistory" ("mistakeId", "kind", "sessionId") values (m."id", 'MASTERED', p_session);
       end if;
     else

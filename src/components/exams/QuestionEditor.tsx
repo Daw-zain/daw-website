@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { rpc } from "@/lib/exams/client";
 import {
   bankErrorKey,
   blankQuestion,
   catName,
+  FIGURE_KINDS,
   newItemId,
   QUESTION_TYPES,
   toSavePayload,
   type Category,
+  type ClozeBlank,
+  type ExamAsset,
+  type Figure,
+  type FigureKind,
   type Item,
+  type Region,
   type QuestionFull,
   type QuestionType,
   type ScenarioSummary,
@@ -20,6 +26,7 @@ import {
 import { AssetManager } from "./AssetManager";
 import { Notice, type ExamLabels } from "./ExamShell";
 import { QuestionPreview } from "./QuestionPreview";
+import { FigureView, useSignedOne } from "./AdvancedQuestions";
 
 const Field = ({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) => (
   <label className={`block text-sm ${className}`}>
@@ -94,6 +101,126 @@ function ScoringSelect({ e, mode, modes, onChange }: { e: ExamLabels["bank"]["ed
   );
 }
 
+/* ───────────── phase 10 editors ───────────── */
+
+const clamp = (n: number) => Math.max(0, Math.min(100, n));
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const twoItems = (): Item[] => [{ id: newItemId(), textAr: "", textEn: "" }, { id: newItemId(), textAr: "", textEn: "" }];
+
+/** draw the correct areas on the question's first image (drag to draw a rectangle) */
+function HotspotEditor({ e, labels, url, regions, onChange }: { e: ExamLabels["bank"]["editor"]; labels: ExamLabels; url: string | null; regions: Region[]; onChange: (r: Region[]) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<{ x0: number; y0: number; x: number; y: number } | null>(null);
+  const pos = (ev: React.PointerEvent) => {
+    const b = box.current!.getBoundingClientRect();
+    return { x: clamp(((ev.clientX - b.left) / b.width) * 100), y: clamp(((ev.clientY - b.top) / b.height) * 100) };
+  };
+  const rect = draft && { x: Math.min(draft.x0, draft.x), y: Math.min(draft.y0, draft.y), w: Math.abs(draft.x - draft.x0), h: Math.abs(draft.y - draft.y0) };
+  if (!url) return <p className="rounded-xl bg-mist px-4 py-6 text-sm text-slate">{e.hotspotNoImage}</p>;
+  return (
+    <div className="space-y-3">
+      <div dir="ltr" className="overflow-x-auto">
+        <div
+          ref={box}
+          className="relative mx-auto w-fit max-w-full cursor-crosshair touch-none select-none"
+          onPointerDown={(ev) => {
+            if (regions.length >= 10) return;
+            ev.currentTarget.setPointerCapture(ev.pointerId);
+            const p = pos(ev);
+            setDraft({ x0: p.x, y0: p.y, x: p.x, y: p.y });
+          }}
+          onPointerMove={(ev) => draft && setDraft({ ...draft, ...pos(ev) })}
+          onPointerUp={() => {
+            if (rect && rect.w >= 1 && rect.h >= 1) onChange([...regions, { id: newItemId(), x: r2(rect.x), y: r2(rect.y), w: r2(rect.w), h: r2(rect.h) }]);
+            setDraft(null);
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from private storage */}
+          <img src={url} alt="" className="block h-auto max-h-[70vh] w-auto max-w-full rounded-lg" draggable={false} />
+          {regions.map((g, i) => (
+            <span key={g.id} className="pointer-events-none absolute rounded border-2 border-emerald-600 bg-emerald-400/25" style={{ left: `${g.x}%`, top: `${g.y}%`, width: `${g.w}%`, height: `${g.h}%` }}>
+              <span className="absolute -top-2.5 left-1 rounded bg-emerald-600 px-1 text-[10px] font-bold text-white">{i + 1}</span>
+            </span>
+          ))}
+          {rect && <span className="pointer-events-none absolute rounded border-2 border-dashed border-brand bg-brand/15" style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} />}
+        </div>
+      </div>
+      <ul className="flex flex-wrap gap-2 text-sm">
+        {regions.map((g, i) => (
+          <li key={g.id} className="flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-1.5">
+            <b className="text-emerald-700">{e.area} {i + 1}</b>
+            <span className="text-xs text-slate" dir="ltr">{g.x},{g.y} · {g.w}×{g.h}</span>
+            <button type="button" onClick={() => onChange(regions.filter((x) => x.id !== g.id))} className="text-gold-600 hover:underline">{e.remove}</button>
+          </li>
+        ))}
+        {!regions.length && <li className="text-slate">{labels.attempt.noAreas}</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** optional table / chart for any question type */
+function FigureEditor({ e, labels, figure, locale, onChange }: { e: ExamLabels["bank"]["editor"]; labels: ExamLabels; figure: Figure | undefined; locale: string; onChange: (f: Figure | undefined) => void }) {
+  const rows = figure?.rows ?? [];
+  const setRows = (next: string[][]) => figure && onChange({ ...figure, rows: next });
+  const cols = rows[0]?.length ?? 0;
+  return (
+    <details className="rounded-xl border border-line p-3" open={!!figure}>
+      <summary className="cursor-pointer text-sm font-semibold text-navy">{e.figure}</summary>
+      <div className="mt-3 space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label={e.figureKind}>
+            <select
+              value={figure?.kind ?? ""}
+              onChange={(ev) => {
+                const k = ev.target.value as FigureKind | "";
+                onChange(k ? (figure ? { ...figure, kind: k } : { kind: k, captionAr: "", captionEn: "", rows: [["", ""], ["", ""], ["", ""]] }) : undefined);
+              }}
+              className="field"
+            >
+              <option value="">{e.figureKinds.NONE}</option>
+              {FIGURE_KINDS.map((k) => <option key={k} value={k}>{e.figureKinds[k]}</option>)}
+            </select>
+          </Field>
+          {figure && (
+            <>
+              <Field label={e.captionAr}><input value={figure.captionAr} onChange={(ev) => onChange({ ...figure, captionAr: ev.target.value })} className="field" dir="rtl" /></Field>
+              <Field label={e.captionEn}><input value={figure.captionEn} onChange={(ev) => onChange({ ...figure, captionEn: ev.target.value })} className="field" dir="ltr" /></Field>
+            </>
+          )}
+        </div>
+        {figure && (
+          <>
+            <p className="text-xs text-slate">{e.figureHint}</p>
+            <div className="overflow-x-auto">
+              <table className="border-collapse">
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i}>
+                      {r.map((c, k) => (
+                        <td key={k} className="p-0.5">
+                          <input value={c} onChange={(ev) => setRows(rows.map((x, a) => (a === i ? x.map((y, b) => (b === k ? ev.target.value : y)) : x)))} className={`field w-28 py-1.5 text-sm ${i === 0 ? "font-semibold" : ""}`} aria-label={`${i + 1}:${k + 1}`} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={rows.length >= 31} onClick={() => setRows([...rows, Array(cols).fill("")])} className="btn btn-outline btn-sm">{e.addRow}</button>
+              <button type="button" disabled={rows.length <= 2} onClick={() => setRows(rows.slice(0, -1))} className="btn btn-outline btn-sm">{e.delRow}</button>
+              <button type="button" disabled={cols >= 10} onClick={() => setRows(rows.map((r) => [...r, ""]))} className="btn btn-outline btn-sm">{e.addCol}</button>
+              <button type="button" disabled={cols <= 2} onClick={() => setRows(rows.map((r) => r.slice(0, -1)))} className="btn btn-outline btn-sm">{e.delCol}</button>
+            </div>
+            <FigureView figure={figure} locale={locale} labels={labels} />
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
 /** Create / edit one question. Inputs adapt to the type; the database validates everything again on save. */
 export function QuestionEditor({
   programId,
@@ -125,8 +252,34 @@ export function QuestionEditor({
   const setContent = (patch: Partial<QuestionFull["content"]>) => setQ((cur) => ({ ...cur, content: { ...cur.content, ...patch } }));
   const setAnswer = (patch: Partial<QuestionFull["answer"]>) => setQ((cur) => ({ ...cur, answer: { ...cur.answer, ...patch } }));
 
+  // phase 10: the hotspot picture is the first image attachment
+  const [assets, setAssets] = useState<ExamAsset[]>([]);
+  const hotspotUrl = useSignedOne(q.type === "HOTSPOT" ? assets.find((a) => a.kind === "IMAGE")?.path : null);
+  const arText = useRef<HTMLTextAreaElement>(null);
+  const enText = useRef<HTMLTextAreaElement>(null);
+  const blanks = q.content.blanks ?? [];
+  const insertAt = (el: HTMLTextAreaElement | null, value: string, marker: string) => {
+    const s = el?.selectionStart ?? value.length;
+    const t = el?.selectionEnd ?? s;
+    return value.slice(0, s) + marker + value.slice(t);
+  };
+  const addBlank = () => {
+    const id = String(Math.max(0, ...blanks.map((b) => Number(b.id) || 0)) + 1);
+    setContent({ blanks: [...blanks, { id, kind: "SELECT", options: twoItems() }], textAr: insertAt(arText.current, q.content.textAr ?? "", `[[${id}]]`) });
+  };
+  const setBlank = (id: string, patch: Partial<ClozeBlank>) => setContent({ blanks: blanks.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
+  const setBlankAnswer = (id: string, v: { correct?: string; accepted?: string[]; caseSensitive?: boolean }) => setAnswer({ blanks: { ...(q.answer.blanks ?? {}), [id]: v } });
+  const removeBlank = (id: string) => {
+    const strip = (s?: string) => (s ?? "").split(`[[${id}]]`).join("");
+    const rest = { ...(q.answer.blanks ?? {}) };
+    delete rest[id];
+    setContent({ blanks: blanks.filter((b) => b.id !== id), textAr: strip(q.content.textAr), textEn: strip(q.content.textEn) });
+    setAnswer({ blanks: rest });
+  };
+
   const changeType = (type: QuestionType) => {
     const fresh = blankQuestion(type);
+    fresh.content = { ...fresh.content, figure: q.content.figure };
     setQ((cur) => ({ ...fresh, stemAr: cur.stemAr, stemEn: cur.stemEn, status: cur.status, difficulty: cur.difficulty, points: cur.points, weight: cur.weight, domainId: cur.domainId, topicId: cur.topicId, subtopicId: cur.subtopicId, keywords: cur.keywords, reference: cur.reference, feedbackAr: cur.feedbackAr, feedbackEn: cur.feedbackEn, explanationAr: cur.explanationAr, explanationEn: cur.explanationEn, scenarioId: cur.scenarioId }));
   };
 
@@ -406,6 +559,132 @@ export function QuestionEditor({
           </div>
         )}
 
+        {/* ── phase 10 ── */}
+        {q.type === "HOTSPOT" && (
+          <div className="space-y-3">
+            <p className="field-label">{e.areas} <span className="font-normal text-slate">— {e.hotspotHint}</span></p>
+            {q.id ? <HotspotEditor e={e} labels={labels} url={hotspotUrl} regions={q.answer.regions ?? []} onChange={(regions) => setAnswer({ regions })} /> : <Notice>{e.hotspotSaveFirst}</Notice>}
+            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL", "PARTIAL_PENALTY"]} onChange={(mode) => set({ scoring: { mode } })} />
+          </div>
+        )}
+
+        {q.type === "DRAGDROP" && (
+          <div className="space-y-4">
+            <div>
+              <p className="field-label">{e.zones}</p>
+              <ItemRows
+                e={e}
+                list={q.content.zones ?? []}
+                min={1}
+                onChange={(zones) => { setContent({ zones }); setAnswer({ placements: Object.fromEntries(Object.entries(q.answer.placements ?? {}).filter(([, z]) => zones.some((x) => x.id === z))) }); }}
+              />
+            </div>
+            <div>
+              <p className="field-label">{e.ddItems} <span className="font-normal text-slate">— {e.ddItemsHint}</span></p>
+              <ItemRows
+                e={e}
+                list={q.content.items ?? []}
+                onChange={(items) => { setContent({ items }); setAnswer({ placements: Object.fromEntries(Object.entries(q.answer.placements ?? {}).filter(([i]) => items.some((x) => x.id === i))) }); }}
+                lead={(it) => (
+                  <select
+                    value={q.answer.placements?.[it.id] ?? ""}
+                    onChange={(ev) => {
+                      const p = { ...(q.answer.placements ?? {}) };
+                      if (ev.target.value) p[it.id] = ev.target.value;
+                      else delete p[it.id];
+                      setAnswer({ placements: p });
+                    }}
+                    className="field w-auto max-w-[12rem] py-2 text-sm"
+                    aria-label={e.zone}
+                  >
+                    <option value="">{e.distractor}</option>
+                    {(q.content.zones ?? []).map((z, i) => (
+                      <option key={z.id} value={z.id}>
+                        {i + 1}. {(locale === "ar" ? z.textAr || z.textEn : z.textEn || z.textAr) || "…"}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL", "PARTIAL_PENALTY"]} onChange={(mode) => set({ scoring: { mode } })} />
+          </div>
+        )}
+
+        {q.type === "CLOZE" && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate">{e.clozeHint}</p>
+            <Field label={e.clozeTextAr}>
+              <textarea ref={arText} value={q.content.textAr ?? ""} onChange={(ev) => setContent({ textAr: ev.target.value })} rows={5} className="field" dir="rtl" />
+            </Field>
+            <button type="button" onClick={addBlank} disabled={blanks.length >= 20} className="btn btn-outline btn-sm">+ {e.insertBlank}</button>
+            <Field label={e.clozeTextEn}>
+              <textarea ref={enText} value={q.content.textEn ?? ""} onChange={(ev) => setContent({ textEn: ev.target.value })} rows={4} className="field" dir="ltr" />
+            </Field>
+            {blanks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-slate">{e.insertInEnglish}</span>
+                {blanks.map((b) => (
+                  <button key={b.id} type="button" onClick={() => setContent({ textEn: insertAt(enText.current, q.content.textEn ?? "", `[[${b.id}]]`) })} className="rounded-lg border border-line px-2 py-1 font-mono text-xs hover:border-brand" dir="ltr">
+                    [[{b.id}]]
+                  </button>
+                ))}
+              </div>
+            )}
+            {blanks.map((b) => {
+              const ans = q.answer.blanks?.[b.id] ?? {};
+              return (
+                <div key={b.id} className="space-y-3 rounded-xl border border-line bg-mist/40 p-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <b className="text-navy" dir="ltr">[[{b.id}]]</b>
+                    <select
+                      value={b.kind}
+                      onChange={(ev) => {
+                        const kind = ev.target.value as ClozeBlank["kind"];
+                        setBlank(b.id, { kind, options: kind === "SELECT" ? b.options ?? twoItems() : undefined });
+                        setBlankAnswer(b.id, kind === "SELECT" ? {} : { accepted: [] });
+                      }}
+                      className="field w-auto py-1.5 text-sm"
+                      aria-label={e.blankKind}
+                    >
+                      <option value="SELECT">{e.blankKinds.SELECT}</option>
+                      <option value="TEXT">{e.blankKinds.TEXT}</option>
+                    </select>
+                    <button type="button" onClick={() => removeBlank(b.id)} className="text-sm text-gold-600 hover:underline">{e.remove}</button>
+                  </div>
+                  {b.kind === "SELECT" ? (
+                    <ItemRows
+                      e={e}
+                      list={b.options ?? []}
+                      onChange={(options) => { setBlank(b.id, { options }); if (ans.correct && !options.some((o) => o.id === ans.correct)) setBlankAnswer(b.id, {}); }}
+                      lead={(it) => (
+                        <label className="flex items-center gap-1.5 px-1 text-xs font-semibold text-emerald-700">
+                          <input type="radio" name={`blank-${b.id}`} checked={ans.correct === it.id} onChange={() => setBlankAnswer(b.id, { correct: it.id })} className="h-4 w-4 accent-emerald-600" />
+                          {e.correct}
+                        </label>
+                      )}
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <Field label={e.accepted}>
+                        <textarea value={(ans.accepted ?? []).join("\n")} onChange={(ev) => setBlankAnswer(b.id, { ...ans, accepted: ev.target.value.split("\n") })} rows={3} className="field" />
+                      </Field>
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={!!ans.caseSensitive} onChange={(ev) => setBlankAnswer(b.id, { ...ans, caseSensitive: ev.target.checked })} className="h-4 w-4 accent-[var(--color-brand)]" />
+                        {e.caseSensitive}
+                      </label>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL"]} onChange={(mode) => set({ scoring: { mode } })} />
+          </div>
+        )}
+
+        {/* graphic-based: table / chart on any type */}
+        <FigureEditor e={e} labels={labels} figure={q.content.figure} locale={locale} onChange={(figure) => setContent({ figure })} />
+
         {/* ── learning support (never sent during a test) ── */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={e.feedbackAr}>
@@ -434,7 +713,7 @@ export function QuestionEditor({
 
         <div className="rounded-xl border border-line p-4">
           {q.id ? (
-            <AssetManager programId={programId} ownerType="QUESTION" ownerId={q.id} canEdit labels={labels} />
+            <AssetManager programId={programId} ownerType="QUESTION" ownerId={q.id} canEdit labels={labels} onChange={setAssets} />
           ) : (
             <p className="text-sm text-slate">{labels.bank.assets.saveFirst}</p>
           )}

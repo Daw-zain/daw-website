@@ -9,6 +9,7 @@ import { txt, type AttemptReview, type ReviewQuestion } from "@/lib/exams/attemp
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { AttemptScenarioView, QuestionMedia } from "./AnswerInput";
+import { HotspotAnswer } from "./AdvancedQuestions";
 
 /** /[locale]/exams/review?id=… — result and (if the exam allows) question-by-question review */
 export function AttemptReviewPage(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -106,6 +107,33 @@ export function answerText(q: { data: ReviewQuestion["data"] }, a: ReviewQuestio
       return ((resp.order as string[]) ?? []).map((id, i) => `${i + 1}. ${opt(id)}`).join("  ");
     case "MATCHING":
       return (d.left ?? []).map((l) => `${txt(l, locale)} ← ${opt((resp.pairs as Record<string, string>)?.[l.id] ?? "") || "—"}`).join("  ·  ");
+    // ── phase 10 ──
+    case "HOTSPOT": {
+      const n = ((resp.points ?? resp.regions) as unknown[] | undefined)?.length ?? 0;
+      return n ? (resp.points ? labels.review.marksN : labels.review.areasN).replace("{n}", String(n)) : "";
+    }
+    case "DRAGDROP": {
+      const place = (resp.place ?? resp.placements ?? {}) as Record<string, string>;
+      const item = (id: string) => txt((d.items ?? []).find((o) => o.id === id), locale);
+      return (d.zones ?? [])
+        .map((z) => {
+          const inside = Object.entries(place).filter(([, zone]) => zone === z.id).map(([it]) => item(it));
+          return inside.length ? `${txt(z, locale)}: ${inside.join("، ")}` : "";
+        })
+        .filter(Boolean)
+        .join("  ·  ");
+    }
+    case "CLOZE": {
+      const vals = (resp.blanks ?? {}) as Record<string, string | { correct?: string; accepted?: string[] }>;
+      return (d.blanks ?? [])
+        .map((b) => {
+          const v = vals[b.id];
+          if (v === undefined || v === "") return `[${b.id}] —`;
+          if (typeof v === "string") return `[${b.id}] ${b.kind === "SELECT" ? txt((b.options ?? []).find((o) => o.id === v), locale) : v}`;
+          return `[${b.id}] ${v.correct ? txt((b.options ?? []).find((o) => o.id === v.correct), locale) : (v.accepted ?? []).join(" / ")}`;
+        })
+        .join("   ");
+    }
   }
   return "";
 }
@@ -128,7 +156,8 @@ function ReviewCard({ q, n, total, locale, labels }: { q: ReviewQuestion; n: num
         </span>
       </div>
       <p className="mt-2 whitespace-pre-line font-semibold leading-8 text-navy">{ar ? q.data.stemAr || q.data.stemEn : q.data.stemEn || q.data.stemAr}</p>
-      <QuestionMedia assets={q.data.images} locale={locale} />
+      <QuestionMedia assets={q.data.images} figure={q.data.figure} locale={locale} labels={labels} />
+      {q.data.type === "HOTSPOT" && <div className="mt-3"><HotspotAnswer data={q.data} response={q.response} regions={q.answer?.regions} labels={labels} /></div>}
       <dl className="mt-3 space-y-2 text-sm leading-7">
         <div><dt className="font-semibold text-slate">{r.yourAnswer}</dt><dd className="whitespace-pre-line text-ink">{answerText(q, q.response, locale, labels) || <span className="text-slate">{r.notAnswered}</span>}</dd></div>
         {q.answer && q.data.type !== "ESSAY" && <div><dt className="font-semibold text-emerald-700">{r.correctAnswer}</dt><dd className="text-ink">{answerText(q, q.answer, locale, labels)}</dd></div>}
