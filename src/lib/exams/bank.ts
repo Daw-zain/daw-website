@@ -16,9 +16,35 @@ export type Category = { id: string; parentId: string | null; kind: CategoryKind
 
 export type BankOverview = {
   categories: Category[];
-  counts: { total: number; byStatus: Partial<Record<QStatus, number>>; byType: Partial<Record<QuestionType, number>> };
-  can: { edit: boolean; delete: boolean; categories: boolean };
+  counts: { total: number; scenarios: number; byStatus: Partial<Record<QStatus, number>>; byType: Partial<Record<QuestionType, number>> };
+  can: { edit: boolean; delete: boolean; categories: boolean; scenarios: boolean };
 };
+
+// ── phase 4: scenarios + attachments ──
+export const SCENARIO_PARTS = ["project", "events", "constraints", "risks", "stakeholders", "info"] as const;
+export type ScenarioPart = (typeof SCENARIO_PARTS)[number];
+export type ScenarioTable = { captionAr: string; captionEn: string; rows: string[][] };
+export type ScenarioSummary = { id: string; titleAr: string; titleEn: string; status: QStatus; displayMode: "SIDE" | "SECTION"; version: number; questions: number; assets: number; updatedAt: string };
+export type ScenarioFull = {
+  id: string;
+  titleAr: string;
+  titleEn: string;
+  bodyAr: string;
+  bodyEn: string;
+  details: Partial<Record<ScenarioPart, { ar: string; en: string }>>;
+  tables: ScenarioTable[];
+  displayMode: "SIDE" | "SECTION";
+  status: QStatus;
+  version: number;
+  questions?: { id: string; type: QuestionType; status: QStatus; stemAr: string; stemEn: string; points: number; scenarioOrder: number; version: number }[];
+};
+export const blankScenario = (): ScenarioFull => ({ id: "", titleAr: "", titleEn: "", bodyAr: "", bodyEn: "", details: {}, tables: [], displayMode: "SIDE", status: "DRAFT", version: 0 });
+
+export type OwnerType = "QUESTION" | "SCENARIO";
+export type ExamAsset = { id: string; ownerType: OwnerType; ownerId: string; kind: "IMAGE" | "FILE"; path: string; mime: string; size: number; fileName: string; captionAr: string; captionEn: string; sortOrder: number };
+export const ASSET_BUCKET = "exam-assets";
+export const ASSET_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "application/pdf": "pdf" };
+export const ASSET_MAX = 10 * 1024 * 1024;
 
 export type QuestionSummary = {
   id: string;
@@ -34,6 +60,7 @@ export type QuestionSummary = {
   subtopicId: string | null;
   version: number;
   updatedAt: string;
+  scenarioId?: string | null;
 };
 
 export type QuestionContent = {
@@ -72,6 +99,8 @@ export type QuestionFull = Omit<QuestionSummary, "updatedAt"> & {
   explanationEn: string;
   optionRationale: Record<string, { ar?: string; en?: string }>;
   updatedAt?: string;
+  scenarioId: string | null;
+  scenarioOrder?: number;
 };
 
 export const newItemId = () => Math.random().toString(36).slice(2, 10);
@@ -99,6 +128,7 @@ export function blankQuestion(type: QuestionType): QuestionFull {
     explanationAr: "",
     explanationEn: "",
     optionRationale: {},
+    scenarioId: null,
     scoring: { mode: "ALL_OR_NOTHING" as ScoringMode },
   };
   switch (type) {
@@ -146,22 +176,25 @@ export function toSavePayload(q: QuestionFull) {
     explanationAr: q.explanationAr,
     explanationEn: q.explanationEn,
     optionRationale: q.optionRationale,
+    scenarioId: q.scenarioId,
   };
 }
 
 /** Database error → message key in labels.bank.errors (e.g. "invalid_question: options_min_2" → options_min_2) */
 export function bankErrorKey(e: unknown): string {
   const msg = e instanceof ExamError ? e.message : String((e as Error)?.message ?? e);
-  const m = msg.match(/invalid_(?:question|category): ([a-z_0-9]+)/);
+  const m = msg.match(/invalid_(?:question|category|scenario|asset): ([a-z_0-9]+)/);
   if (m) {
     const key = m[1];
     if (/^right_min/.test(key)) return "right_min";
     return key;
   }
-  for (const k of ["category_in_use", "forbidden", "not_found"]) if (msg.includes(k)) return k;
+  for (const k of ["category_in_use", "scenario_in_use", "forbidden", "not_found"]) if (msg.includes(k)) return k;
   return "unknown";
 }
 
 export const text = (i: { textAr: string; textEn: string }, locale: string) => (locale === "ar" ? i.textAr || i.textEn : i.textEn || i.textAr);
 export const stem = (q: { stemAr: string; stemEn: string }, locale: string) => (locale === "ar" ? q.stemAr || q.stemEn : q.stemEn || q.stemAr);
 export const catName = (c: { nameAr: string; nameEn: string }, locale: string) => (locale === "ar" ? c.nameAr || c.nameEn : c.nameEn || c.nameAr);
+export const title = (s: { titleAr: string; titleEn: string }, locale: string) => (locale === "ar" ? s.titleAr || s.titleEn : s.titleEn || s.titleAr);
+export const pick = (v: { ar?: string; en?: string } | undefined, locale: string) => (locale === "ar" ? v?.ar || v?.en || "" : v?.en || v?.ar || "");

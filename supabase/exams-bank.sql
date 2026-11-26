@@ -185,6 +185,7 @@ as $$
     'points', q."points", 'weight', q."weight", 'difficulty', q."difficulty",
     'domainId', q."domainId", 'topicId', q."topicId", 'subtopicId', q."subtopicId",
     'keywords', to_jsonb(q."keywords"), 'reference', q."reference", 'version', q."version",
+    'scenarioId', q."scenarioId", 'scenarioOrder', q."scenarioOrder",
     'createdAt', q."createdAt", 'updatedAt', q."updatedAt",
     'answer', s."answer", 'scoring', s."scoring",
     'feedbackAr', s."feedbackAr", 'feedbackEn', s."feedbackEn",
@@ -217,12 +218,14 @@ begin
       from public."QuestionCategory" c where c."programId" = p_program),
     'counts', jsonb_build_object(
       'total', (select count(*) from public."Question" where "programId" = p_program),
+      'scenarios', (select count(*) from public."Scenario" where "programId" = p_program),
       'byStatus', (select coalesce(jsonb_object_agg("status", n), '{}'::jsonb) from (select "status", count(*) n from public."Question" where "programId" = p_program group by 1) x),
       'byType', (select coalesce(jsonb_object_agg("type", n), '{}'::jsonb) from (select "type", count(*) n from public."Question" where "programId" = p_program group by 1) x)),
     'can', jsonb_build_object(
       'edit', public.exam_instructor_can(p_program, 'canEditQuestions'),
       'delete', public.exam_instructor_can(p_program, 'canDeleteQuestions'),
-      'categories', public.exam_instructor_can(p_program, 'canManageCategories')));
+      'categories', public.exam_instructor_can(p_program, 'canManageCategories'),
+      'scenarios', public.exam_instructor_can(p_program, 'canManageScenarios')));
 end $$;
 
 -- Create or rename a category. Hierarchy: DOMAIN → TOPIC → SUBTOPIC, all inside the same course.
@@ -315,6 +318,9 @@ begin
         and (nullif(f ->> 'status', '') is null or q."status" = f ->> 'status')
         and (nullif(f ->> 'difficulty', '') is null or q."difficulty" = f ->> 'difficulty')
         and (v_cat is null or v_cat in (q."domainId", q."topicId", q."subtopicId"))
+        and (nullif(f ->> 'scenarioId', '') is null
+             or (f ->> 'scenarioId' = 'none' and q."scenarioId" is null)
+             or q."scenarioId" = f ->> 'scenarioId')
         and (v_q is null or q."stemAr" ilike '%' || v_q || '%' or q."stemEn" ilike '%' || v_q || '%'
              or exists (select 1 from unnest(q."keywords") kw where kw ilike '%' || v_q || '%'))
     )
@@ -326,7 +332,7 @@ begin
           'stemAr', left(x."stemAr", 220), 'stemEn', left(x."stemEn", 220),
           'difficulty', x."difficulty", 'points', x."points", 'weight', x."weight",
           'domainId', x."domainId", 'topicId', x."topicId", 'subtopicId', x."subtopicId",
-          'version', x."version", 'updatedAt', x."updatedAt") order by x."updatedAt" desc)
+          'version', x."version", 'updatedAt', x."updatedAt", 'scenarioId', x."scenarioId") order by x."updatedAt" desc)
         from (select * from m order by "updatedAt" desc offset (v_page - 1) * v_size limit v_size) x), '[]'::jsonb))
   );
 end $$;
@@ -369,6 +375,7 @@ declare
   v_top text := nullif(p_q ->> 'topicId', '');
   v_sub text := nullif(p_q ->> 'subtopicId', '');
   v_kw text[]; norm jsonb; cat public."QuestionCategory"; cur public."Question"; v_version int;
+  v_scn text := nullif(p_q ->> 'scenarioId', ''); v_scn_order int;
 begin
   -- common fields
   if v_ar = '' and v_en = '' then raise exception 'invalid_question: stem_missing'; end if;
@@ -399,18 +406,27 @@ begin
     raise exception 'invalid_question: domain';
   end if;
 
+  -- multi-question scenario (phase 4): must be a scenario of this course; new links go to the end
+  if v_scn is not null and not exists (select 1 from public."Scenario" where "id" = v_scn and "programId" = p_program) then
+    raise exception 'invalid_question: scenario';
+  end if;
+
   norm := public.exam_bank_validate(v_type, p_q -> 'content', p_q -> 'answer', p_q -> 'scoring');
 
   if v_id is null then
+    v_scn_order := case when v_scn is null then 0 else (select coalesce(max("scenarioOrder"), 0) + 1 from public."Question" where "scenarioId" = v_scn) end;
     insert into public."Question" ("programId", "type", "status", "stemAr", "stemEn", "content", "points", "weight", "difficulty",
-      "domainId", "topicId", "subtopicId", "keywords", "reference", "createdById", "updatedById")
+      "domainId", "topicId", "subtopicId", "keywords", "reference", "scenarioId", "scenarioOrder", "createdById", "updatedById")
     values (p_program, v_type, v_status, v_ar, v_en, norm -> 'content', v_points, v_weight, v_diff,
-      v_dom, v_top, v_sub, v_kw, left(trim(coalesce(p_q ->> 'reference', '')), 1000), me."id", me."id")
+      v_dom, v_top, v_sub, v_kw, left(trim(coalesce(p_q ->> 'reference', '')), 1000), v_scn, v_scn_order, me."id", me."id")
     returning "id", "version" into v_id, v_version;
   else
     select * into cur from public."Question" where "id" = v_id;
     if cur."id" is null or cur."programId" <> p_program then raise exception 'not_found' using errcode = 'P0002'; end if;
-    update public."Question" set "type" = v_type, "status" = v_status, "stemAr" = v_ar, "stemEn" = v_en, "content" = norm -> 'content',
+    v_scn_order := case when v_scn is null then 0
+                        when v_scn is not distinct from cur."scenarioId" then cur."scenarioOrder"
+                        else (select coalesce(max("scenarioOrder"), 0) + 1 from public."Question" where "scenarioId" = v_scn) end;
+    update public."Question" set "scenarioId" = v_scn, "scenarioOrder" = v_scn_order, "type" = v_type, "status" = v_status, "stemAr" = v_ar, "stemEn" = v_en, "content" = norm -> 'content',
       "points" = v_points, "weight" = v_weight, "difficulty" = v_diff, "domainId" = v_dom, "topicId" = v_top, "subtopicId" = v_sub,
       "keywords" = v_kw, "reference" = left(trim(coalesce(p_q ->> 'reference', '')), 1000),
       "version" = cur."version" + 1, "updatedById" = me."id", "updatedAt" = now()
@@ -476,14 +492,17 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare q public."Question";
+declare q public."Question"; v_paths jsonb;
 begin
   select * into q from public."Question" where "id" = p_id;
   if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   perform public.exam_require_perm(q."programId", 'canDeleteQuestions');
+  select coalesce(jsonb_agg("path"), '[]'::jsonb) into v_paths from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
+  delete from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
   delete from public."Question" where "id" = p_id;
   perform public.exam_log('question.delete', 'Question', p_id, q."programId", jsonb_build_object('type', q."type", 'stemAr', left(q."stemAr", 120)));
-  return jsonb_build_object('deleted', p_id);
+  -- the browser removes the attachment files from Storage
+  return jsonb_build_object('deleted', p_id, 'paths', v_paths);
 end $$;
 
 -- ── access ──

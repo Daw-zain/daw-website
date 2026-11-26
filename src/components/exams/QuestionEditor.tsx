@@ -13,8 +13,11 @@ import {
   type Item,
   type QuestionFull,
   type QuestionType,
+  type ScenarioSummary,
   type ScoringMode,
+  title as scenarioTitle,
 } from "@/lib/exams/bank";
+import { AssetManager } from "./AssetManager";
 import { Notice, type ExamLabels } from "./ExamShell";
 import { QuestionPreview } from "./QuestionPreview";
 
@@ -96,6 +99,7 @@ export function QuestionEditor({
   programId,
   initial,
   categories,
+  scenarios = [],
   locale,
   labels,
   onSaved,
@@ -104,6 +108,7 @@ export function QuestionEditor({
   programId: string;
   initial: QuestionFull | null;
   categories: Category[];
+  scenarios?: ScenarioSummary[];
   locale: string;
   labels: ExamLabels;
   onSaved: (q: QuestionFull) => void;
@@ -235,6 +240,17 @@ export function QuestionEditor({
             </select>
           </Field>
         </div>
+
+        <Field label={e.scenario} className="max-w-xl">
+          <select value={q.scenarioId ?? ""} onChange={(ev) => set({ scenarioId: ev.target.value || null })} className="field">
+            <option value="">{e.noScenario}</option>
+            {scenarios.map((sc) => (
+              <option key={sc.id} value={sc.id}>
+                {scenarioTitle(sc, locale)}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label={e.stemAr}>
           <textarea value={q.stemAr} onChange={(ev) => set({ stemAr: ev.target.value })} rows={3} className="field" dir="rtl" />
@@ -415,6 +431,14 @@ export function QuestionEditor({
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4 shrink-0" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
           {e.hiddenNote}
         </p>
+
+        <div className="rounded-xl border border-line p-4">
+          {q.id ? (
+            <AssetManager programId={programId} ownerType="QUESTION" ownerId={q.id} canEdit labels={labels} />
+          ) : (
+            <p className="text-sm text-slate">{labels.bank.assets.saveFirst}</p>
+          )}
+        </div>
 
         {error && <Notice tone="error">{error}</Notice>}
         <div className="flex flex-wrap gap-3">

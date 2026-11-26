@@ -93,6 +93,8 @@ model Program {
   enrollments     Enrollment[]
   questionCategories QuestionCategory[]
   questions       Question[]
+  scenarios       Scenario[]
+  examAssets      ExamAsset[]
 }
 
 model CourseSession {
@@ -510,8 +512,13 @@ model Question {
   updatedAt   DateTime          @default(now()) @updatedAt
   secret      QuestionSecret?
   versions    QuestionVersion[]
+  // Phase 4: a question may belong to one multi-question scenario (shared case text, shown once)
+  scenarioId    String?
+  scenario      Scenario?       @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
+  scenarioOrder Int             @default(0)
 
   @@index([programId, status])
+  @@index([scenarioId])
 }
 
 model QuestionSecret {
@@ -537,4 +544,67 @@ model QuestionVersion {
   createdAt   DateTime @default(now())
 
   @@unique([questionId, version])
+}
+
+// ───────────── Exam system · Phase 4: multi-question scenarios + private attachments ─────────────
+
+model Scenario {
+  id           String            @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId    String
+  program      Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  titleAr      String
+  titleEn      String            @default("")
+  bodyAr       String            @default("")
+  bodyEn       String            @default("")
+  // structured case data, each part {ar, en}: project, events, constraints, risks, stakeholders, info
+  details      Json              @default("{}")
+  // tables: [{ captionAr, captionEn, rows: string[][] }] (first row = header)
+  tables       Json              @default("[]")
+  displayMode  String            @default("SIDE") // SIDE (beside each question) | SECTION (own section)
+  status       String            @default("DRAFT") // DRAFT | ACTIVE | DISABLED
+  version      Int               @default(1)
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now()) @updatedAt
+  questions    Question[]
+  versions     ScenarioVersion[]
+
+  @@index([programId])
+}
+
+model ScenarioVersion {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  scenarioId  String
+  scenario    Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshot    Json
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([scenarioId, version])
+}
+
+// Images and files of questions / scenarios. The file itself lives in the PRIVATE Supabase Storage
+// bucket "exam-assets" at <programId>/<ownerId>/<uuid>.<ext>; it is only reachable through short-lived
+// signed URLs, which storage policies allow only to staff of that course (and, in later phases, to a
+// learner during an attempt that contains the question).
+model ExamAsset {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  ownerType   String // QUESTION | SCENARIO
+  ownerId     String
+  kind        String // IMAGE | FILE
+  path        String   @unique
+  mime        String
+  size        Int
+  fileName    String   @default("")
+  captionAr   String   @default("")
+  captionEn   String   @default("")
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([ownerType, ownerId])
 }

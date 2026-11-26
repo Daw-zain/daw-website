@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { stem, text, type Item, type QuestionFull } from "@/lib/exams/bank";
+import { useEffect, useMemo, useState } from "react";
+import { rpc } from "@/lib/exams/client";
+import { stem, text, type ExamAsset, type Item, type QuestionFull, type ScenarioFull } from "@/lib/exams/bank";
 import type { ExamLabels } from "./ExamShell";
+import { signedUrls } from "./AssetManager";
+import { loadScenarioForView, ScenarioView } from "./BankScenarios";
+
+type Img = { url: string; caption: string; pdf?: boolean };
 
 /** Stable "shuffle" for previews (learners get a real per-attempt shuffle from the server in phase 6) */
 const shuffled = (list: Item[]) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -22,6 +27,25 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
   const [essay, setEssay] = useState("");
   const rightShuffled = useMemo(() => shuffled(q.content.right ?? []), [q.content.right]);
   const unit = ar ? q.content.unitAr || q.content.unitEn : q.content.unitEn || q.content.unitAr;
+  const [scenario, setScenario] = useState<{ s: ScenarioFull; images: Img[] } | null>(null);
+  const [qImages, setQImages] = useState<Img[]>([]);
+
+  // case of the scenario (if any) + this question's own images, through signed URLs
+  useEffect(() => {
+    let live = true;
+    if (q.scenarioId) loadScenarioForView(q.scenarioId, locale).then((r) => live && setScenario(r)).catch(() => live && setScenario(null));
+    else setScenario(null);
+    if (q.id)
+      rpc<ExamAsset[]>("exam_assets", { p_owner_type: "QUESTION", p_owner_id: q.id })
+        .then(async (list) => {
+          const urls = await signedUrls(list.map((a) => a.path));
+          if (live) setQImages(list.filter((a) => urls[a.path]).map((a) => ({ url: urls[a.path], caption: ar ? a.captionAr || a.captionEn : a.captionEn || a.captionAr, pdf: a.kind === "FILE" })));
+        })
+        .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [q.scenarioId, q.id, locale, ar]);
   const words = essay.trim() ? essay.trim().split(/\s+/).length : 0;
 
   const move = (i: number, d: -1 | 1) => {
@@ -32,10 +56,33 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
     setOrder(n);
   };
 
+  const side = scenario?.s.displayMode !== "SECTION";
   return (
     <div className="space-y-5">
+      {scenario && !side && (
+        <div className="rounded-2xl border border-brand/20 bg-brand/5 p-5">
+          <ScenarioView s={scenario.s} locale={locale} labels={labels} images={scenario.images} />
+        </div>
+      )}
+      <div className={scenario && side ? "grid gap-5 lg:grid-cols-2" : ""}>
+      {scenario && side && (
+        <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-brand/20 bg-brand/5 p-5">
+          <ScenarioView s={scenario.s} locale={locale} labels={labels} images={scenario.images} />
+        </div>
+      )}
       <div className="rounded-2xl border border-line bg-white p-5">
         <p className="whitespace-pre-line text-[17px] font-semibold leading-8 text-navy">{stem(q, locale)}</p>
+        {qImages.map((im, i) =>
+          im.pdf ? (
+            <a key={i} href={im.url} target="_blank" rel="noopener" className="mt-3 inline-flex rounded-lg bg-mist px-3 py-2 text-sm font-semibold text-brand">PDF · {im.caption || "↗"}</a>
+          ) : (
+            <figure key={i} className="mt-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- signed URL from private storage */}
+              <img src={im.url} alt={im.caption} className="max-h-80 w-full rounded-lg bg-mist object-contain" draggable={false} />
+              {im.caption && <figcaption className="mt-1 text-sm text-slate">{im.caption}</figcaption>}
+            </figure>
+          ),
+        )}
 
         <div className="mt-4">
           {(q.type === "MCQ" || q.type === "MULTI") && (
@@ -130,6 +177,7 @@ export function QuestionPreview({ q, locale, labels, showKey = true }: { q: Ques
         </div>
       </div>
 
+      </div>
       {showKey && <AnswerKey q={q} locale={locale} labels={labels} />}
     </div>
   );

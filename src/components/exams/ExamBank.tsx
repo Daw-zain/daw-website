@@ -6,18 +6,23 @@ import { useSearchParams } from "next/navigation";
 import { courseTitle, rpc, useExamSession, type ExamCourse } from "@/lib/exams/client";
 import {
   bankErrorKey,
+  blankQuestion,
   catName,
   QUESTION_TYPES,
   stem,
+  title as scenarioTitle,
   type BankOverview,
   type QuestionFull,
   type QuestionSummary,
+  type ScenarioSummary,
 } from "@/lib/exams/bank";
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { BankCategories } from "./BankCategories";
 import { QuestionEditor } from "./QuestionEditor";
 import { QuestionPreview } from "./QuestionPreview";
+import { BankScenarios } from "./BankScenarios";
+import { removeFiles } from "./AssetManager";
 
 /** /[locale]/exams/bank?id=… — one course's question bank (admins and that course's instructors only) */
 export function ExamBank(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -69,7 +74,10 @@ const PAGE = 20;
 function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; labels: ExamLabels }) {
   const b = labels.bank;
   const [overview, setOverview] = useState<BankOverview | null>(null);
-  const [tab, setTab] = useState<"questions" | "categories">("questions");
+  const [tab, setTab] = useState<"questions" | "scenarios" | "categories">("questions");
+  const [scenarioOpen, setScenarioOpen] = useState<string | null>(null);
+  const [returnScenario, setReturnScenario] = useState<string | null>(null);
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [view, setView] = useState<View>({ kind: "list" });
   const [filter, setFilter] = useState<Filter>({ q: "", type: "", status: "", difficulty: "", categoryId: "", page: 1 });
   const [list, setList] = useState<{ total: number; items: QuestionSummary[] } | null>(null);
@@ -84,6 +92,14 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     }
   }, [course.programId]);
 
+  const loadScenarios = useCallback(async () => {
+    try {
+      setScenarios(await rpc<ScenarioSummary[]>("exam_bank_scenarios", { p_program: course.programId, p_filter: {} }));
+    } catch {
+      /* the list stays empty; the editor still works without a scenario */
+    }
+  }, [course.programId]);
+
   const loadList = useCallback(async (f: Filter) => {
     try {
       const r = await rpc<{ total: number; items: QuestionSummary[] }>("exam_bank_questions", { p_program: course.programId, p_filter: { ...f, pageSize: PAGE } });
@@ -93,7 +109,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     }
   }, [course.programId]);
 
-  useEffect(() => { loadOverview(); }, [loadOverview]);
+  useEffect(() => { loadOverview(); loadScenarios(); }, [loadOverview, loadScenarios]);
   // switching list ↔ editor ↔ preview: start at the top (long forms otherwise leave you at the footer)
   useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [view.kind]);
   useEffect(() => {
@@ -101,7 +117,16 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     return () => clearTimeout(t);
   }, [filter, loadList]);
 
-  const refresh = async () => { await Promise.all([loadOverview(), loadList(filter)]); };
+  const refresh = async () => { await Promise.all([loadOverview(), loadList(filter), loadScenarios()]); };
+  // leaving the question editor: go back to the scenario it was opened from, if any
+  const leaveEditor = () => {
+    if (returnScenario) {
+      setTab("scenarios");
+      setScenarioOpen(returnScenario);
+      setReturnScenario(null);
+    }
+    setView({ kind: "list" });
+  };
   const act = async (fn: () => Promise<unknown>, ok: string) => {
     setFlash(null);
     try {
@@ -131,15 +156,20 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     return (
       <QuestionEditor
         programId={course.programId}
+        key={view.q?.id || "new"}
         initial={view.q}
         categories={cats}
+        scenarios={scenarios}
         locale={locale}
         labels={labels}
-        onCancel={() => setView({ kind: "list" })}
-        onSaved={async () => {
-          setView({ kind: "list" });
+        onCancel={leaveEditor}
+        onSaved={async (saved) => {
+          const wasNew = !view.q?.id;
           setFlash({ tone: "success", text: b.saved });
           await refresh();
+          // a new question stays open so images can be attached right away
+          if (wasNew) setView({ kind: "edit", q: saved });
+          else leaveEditor();
         }}
       />
     );
@@ -165,10 +195,11 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-xl border border-line bg-mist p-1" role="tablist">
-          {(["questions", "categories"] as const).map((t) => (
+          {(["questions", "scenarios", "categories"] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("rounded-lg px-4 py-2 text-sm font-semibold transition", tab === t ? "bg-white text-navy shadow-sm" : "text-slate hover:text-navy")}>
               {b.tabs[t]}
               {t === "questions" && <span className="ms-1.5 text-slate">({overview.counts.total})</span>}
+              {t === "scenarios" && <span className="ms-1.5 text-slate">({overview.counts.scenarios ?? 0})</span>}
             </button>
           ))}
         </div>
@@ -183,7 +214,20 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
       {flash && <Notice tone={flash.tone}>{flash.text}</Notice>}
       {!can.edit && <Notice>{b.readOnly}</Notice>}
 
-      {tab === "categories" ? (
+      {tab === "scenarios" ? (
+        <BankScenarios
+          programId={course.programId}
+          canEdit={can.scenarios}
+          canEditQuestions={can.edit}
+          locale={locale}
+          labels={labels}
+          openId={scenarioOpen}
+          onOpen={setScenarioOpen}
+          onChanged={refresh}
+          onEditQuestion={(qid) => { setReturnScenario(scenarioOpen); open(qid, "edit"); }}
+          onNewQuestion={(sid) => { setReturnScenario(sid); setView({ kind: "edit", q: { ...blankQuestion("MCQ"), scenarioId: sid } }); }}
+        />
+      ) : tab === "categories" ? (
         <BankCategories programId={course.programId} categories={cats} canManage={can.categories} locale={locale} labels={labels} onChanged={loadOverview} />
       ) : (
         <>
@@ -224,6 +268,9 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
                     <span className="rounded-md bg-mist px-2 py-0.5 text-slate">{b.difficulties[q.difficulty]}</span>
                     <span className="text-slate" dir="ltr">{Number(q.points)} pt · w{Number(q.weight)} · {b.version}{q.version}</span>
                     {catLabel(q) && <span className="text-slate">· {catLabel(q)}</span>}
+                    {q.scenarioId && scenarios.find((x) => x.id === q.scenarioId) && (
+                      <span className="rounded-md bg-brand/10 px-2 py-0.5 font-semibold text-brand">{b.scenarios.caseLabel}: {scenarioTitle(scenarios.find((x) => x.id === q.scenarioId)!, locale)}</span>
+                    )}
                   </div>
                   <p className="mt-2 line-clamp-2 leading-7 text-navy">{stem(q, locale)}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5 text-sm">
@@ -238,7 +285,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
                       </>
                     )}
                     {can.delete && (
-                      <button type="button" onClick={() => window.confirm(b.confirmDelete) && act(() => rpc("exam_bank_question_delete", { p_id: q.id }), b.deleted)} className="rounded-lg px-2.5 py-1 text-gold-600 hover:bg-gold/10">{b.delete}</button>
+                      <button type="button" onClick={() => window.confirm(b.confirmDelete) && act(async () => { const r = await rpc<{ paths?: string[] }>("exam_bank_question_delete", { p_id: q.id }); await removeFiles(r.paths ?? []); }, b.deleted)} className="rounded-lg px-2.5 py-1 text-gold-600 hover:bg-gold/10">{b.delete}</button>
                     )}
                   </div>
                 </li>
