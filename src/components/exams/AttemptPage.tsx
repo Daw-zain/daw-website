@@ -154,7 +154,7 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
       {/* top bar */}
       <div className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[90rem] flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
-          <p className="min-w-0 flex-1 truncate font-bold text-navy">{ar ? initial.titleAr || initial.titleEn : initial.titleEn || initial.titleAr}</p>
+          <p className="min-w-0 flex-1 basis-full truncate font-bold text-navy sm:basis-auto">{ar ? initial.titleAr || initial.titleEn : initial.titleEn || initial.titleAr}</p>
           <div className="flex items-center gap-1.5">
             {initial.tools?.translation && (
               <button type="button" onClick={() => setCl(cl === "ar" ? "en" : "ar")} aria-pressed={cl === "en"} className={cn("rounded-lg px-2.5 py-1.5 text-sm font-semibold", cl === "en" ? "bg-brand text-white" : "bg-mist text-navy hover:bg-line")} lang={cl === "ar" ? "en" : "ar"}>
