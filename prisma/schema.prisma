@@ -806,3 +806,86 @@ model ExamRateLimit {
   count       Int      @default(0)
   flaggedAt   DateTime?
 }
+
+// ───────────── Exam system · Phase 9: Mistakes Quiz ─────────────
+// Every question a learner answers wrongly in an exam is collected once per learner (MistakeItem) with a
+// frozen copy of the question version, how often it was wrong and the dates (MistakeHistory). Review
+// sessions (MistakeSession) are personal and never touch official attempts or grades.
+
+model MistakeItem {
+  id              String    @id @default(dbgenerated("gen_random_uuid()::text"))
+  memberId        String
+  programId       String
+  questionId      String
+  questionVersion Int
+  snapshot        Json // the question as it was when last answered wrongly (incl. answer — server only)
+  type            String
+  domainId        String?
+  topicId         String?
+  subtopicId      String?
+  difficulty      String?
+  status          String    @default("WRONG_NOT_REVIEWED") // WRONG_NOT_REVIEWED | REVIEWED | CORRECT_IN_REVIEW | WRONG_AGAIN | MASTERED
+  wrongCount      Int       @default(1) // wrong answers in official exams
+  reviewCorrect   Int       @default(0)
+  reviewWrong     Int       @default(0)
+  correctStreak   Int       @default(0) // consecutive correct review sessions
+  firstWrongAt    DateTime  @default(now())
+  lastWrongAt     DateTime  @default(now())
+  lastReviewedAt  DateTime?
+  masteredAt      DateTime?
+  lastAttemptId   String?
+  lastExamId      String?
+  lastResponse    Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  history         MistakeHistory[]
+
+  @@unique([memberId, questionId])
+  @@index([memberId, programId, status])
+  @@index([programId, questionId])
+}
+
+model MistakeHistory {
+  id        String      @id @default(dbgenerated("gen_random_uuid()::text"))
+  mistakeId String
+  mistake   MistakeItem @relation(fields: [mistakeId], references: [id], onDelete: Cascade)
+  kind      String // WRONG_IN_EXAM | REVIEW_CORRECT | REVIEW_WRONG | VIEWED | MASTERED | REOPENED
+  attemptId String?
+  sessionId String?
+  response  Json?
+  createdAt DateTime    @default(now())
+
+  @@index([mistakeId, createdAt])
+}
+
+model MistakeSession {
+  id            String                   @id @default(dbgenerated("gen_random_uuid()::text"))
+  memberId      String
+  programId     String
+  status        String                   @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  feedbackMode  String                   @default("AFTER_ANSWER") // AFTER_ANSWER | AFTER_SESSION
+  deadlineAt    DateTime? // optional timer
+  questionCount Int                      @default(0)
+  correctCount  Int                      @default(0)
+  score         Decimal?                 @db.Decimal(8, 2)
+  maxScore      Decimal?                 @db.Decimal(8, 2)
+  createdAt     DateTime                 @default(now())
+  submittedAt   DateTime?
+  questions     MistakeSessionQuestion[]
+
+  @@index([memberId, programId, status])
+}
+
+model MistakeSessionQuestion {
+  id         String         @id @default(dbgenerated("gen_random_uuid()::text"))
+  sessionId  String
+  session    MistakeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  position   Int
+  mistakeId  String
+  publicData Json
+  response   Json?
+  isCorrect  Boolean?
+  answeredAt DateTime?
+
+  @@unique([sessionId, position])
+}

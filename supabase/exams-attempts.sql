@@ -229,6 +229,8 @@ begin
   perform public.exam_attempt_recalc(p_attempt);
   -- phase 8: warnings exceeded with action REVIEW → the result is held for staff
   update public."ExamAttempt" set "status" = 'UNDER_REVIEW' where "id" = p_attempt and "reviewFlag";
+  -- phase 9: wrong answers go to the learner's mistakes list (shown only once results are released)
+  perform public.exam_collect_mistakes(p_attempt);
   perform public.exam_log('attempt.' || lower(p_status), 'ExamAttempt', p_attempt, (select "programId" from public."ExamAttempt" where "id" = p_attempt), null);
 end $$;
 
@@ -500,7 +502,7 @@ begin
   if a."status" <> 'IN_PROGRESS' then raise exception 'attempt_closed' using errcode = '42501'; end if;
   select * into q from public."AttemptQuestion" where "id" = p_question and "attemptId" = p_attempt;
   if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
-  if not public.exam_response_ok(q."publicData", p_response) then raise exception 'invalid_response' using errcode = '22023'; end if;
+  if not coalesce(public.exam_response_ok(q."publicData", p_response), false) then raise exception 'invalid_response' using errcode = '22023'; end if;
   update public."AttemptQuestion" set "response" = case when p_response is null or p_response = 'null'::jsonb then null else p_response end,
     "flagged" = coalesce(p_flagged, "flagged"), "savedAt" = now()
   where "id" = p_question;
@@ -635,6 +637,7 @@ begin
   update public."AttemptQuestion" set "manualScore" = p_score, "isCorrect" = (p_score >= q."points"), "graderComment" = left(coalesce(p_comment, ''), 3000),
     "gradedById" = me."id", "gradedAt" = now() where "id" = p_question;
   perform public.exam_attempt_recalc(a."id");
+  if p_score < q."points" then perform public.exam_collect_mistakes(a."id"); end if;
   perform public.exam_log('attempt.grade', 'AttemptQuestion', p_question, a."programId", jsonb_build_object('score', p_score));
   return public.exam_attempt_detail(a."id");
 end $$;

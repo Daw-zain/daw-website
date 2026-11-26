@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { SecurityLog } from "./SecurityLog";
+import { MasteryPolicy } from "./MasteryPolicy";
 
 type Flash = { tone: "success" | "error"; text: string } | null;
 
@@ -40,6 +41,7 @@ export function ExamAdmin({ locale, labels, homeLabel }: { locale: string; label
         me.role === "ADMIN" ? (
           <>
             <Members locale={locale} labels={labels} me={me} reloadMe={reload} />
+            <MasteryPolicy labels={labels} />
             <SecurityLog locale={locale} labels={labels} />
           </>
         ) : (
