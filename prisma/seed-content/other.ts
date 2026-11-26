@@ -118,7 +118,7 @@ export const settings: Record<string, string> = {
   atpBadge: "/images/brand/pmi-authorized-training-partner.png",
   contactEmail: "training@aldaleel.ly",
   adminNotifyEmail: "training@aldaleel.ly",
-  phone: "+218 91 1647676",
+  phone: "+218 91 2186622",
   addressAr: "شارع يوسف بن تاشفين، حي الأندلس، طرابلس، ليبيا",
   addressEn: "Youssef Bin Tashfin St., Al-Andalus, Tripoli, Libya",
 };
