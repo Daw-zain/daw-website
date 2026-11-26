@@ -94,6 +94,8 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
   }, [course.programId]);
 
   useEffect(() => { loadOverview(); }, [loadOverview]);
+  // switching list ↔ editor ↔ preview: start at the top (long forms otherwise leave you at the footer)
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [view.kind]);
   useEffect(() => {
     const t = setTimeout(() => loadList(filter), filter.q ? 300 : 0);
     return () => clearTimeout(t);
