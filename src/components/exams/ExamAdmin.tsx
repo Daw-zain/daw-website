@@ -18,6 +18,7 @@ import {
 } from "@/lib/exams/client";
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
+import { SecurityLog } from "./SecurityLog";
 
 type Flash = { tone: "success" | "error"; text: string } | null;
 
@@ -37,7 +38,10 @@ export function ExamAdmin({ locale, labels, homeLabel }: { locale: string; label
     >
       {(me) =>
         me.role === "ADMIN" ? (
-          <Members locale={locale} labels={labels} me={me} reloadMe={reload} />
+          <>
+            <Members locale={locale} labels={labels} me={me} reloadMe={reload} />
+            <SecurityLog locale={locale} labels={labels} />
+          </>
         ) : (
           <Notice tone="error">
             <p>{a.errors.forbidden}</p>

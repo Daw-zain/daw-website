@@ -96,6 +96,8 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                 <ul className="mt-3 list-inside list-disc space-y-1.5 text-sm leading-7 text-ink">
                   {tk.rules.map((r) => <li key={r}>{r}</li>)}
                   {info.security?.fullscreen && <li>{tk.fullscreenRule}</li>}
+                  {(info.security as { detectBlur?: boolean })?.detectBlur && <li>{labels.proctor.monitoredRule}</li>}
+                  {(info.security as { watermark?: boolean })?.watermark && <li>{labels.proctor.watermarkRule}</li>}
                 </ul>
                 {info.openAttemptId ? (
                   <button type="button" onClick={() => go(info.openAttemptId!)} className="btn btn-primary mt-5">{tk.resume}</button>

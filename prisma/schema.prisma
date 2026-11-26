@@ -732,6 +732,7 @@ model ExamAttempt {
   warnings      Int               @default(0)
   settings      Json              @default("{}") // exam settings frozen at start (policies, tools, security, pass mark)
   staffNote     String            @default("")
+  reviewFlag    Boolean           @default(false) // phase 8: warnings exceeded with action REVIEW → result held until staff clear it
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @default(now()) @updatedAt
   questions     AttemptQuestion[]
@@ -779,4 +780,29 @@ model ExamExtraAttempt {
   createdAt   DateTime @default(now())
 
   @@unique([examId, memberId])
+}
+
+// ───────────── Exam system · Phase 8: proctoring + rate limiting ─────────────
+
+// Browser-behaviour events reported during an attempt (leaving the page, losing focus, leaving full
+// screen, copy / paste / right-click attempts). Recorded and counted on the server.
+model ProctorEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  attemptId String
+  memberId  String
+  programId String
+  kind      String // HIDDEN | BLUR | FULLSCREEN_EXIT | COPY | PASTE | CONTEXT_MENU | PRINT | SHORTCUT
+  counted   Boolean  @default(false) // counted as a warning
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([attemptId, createdAt])
+}
+
+// Sliding one-minute counters per member and function (abnormal request rates are refused and logged)
+model ExamRateLimit {
+  key         String   @id // "<scope>:<memberId>"
+  windowStart DateTime @default(now())
+  count       Int      @default(0)
+  flaggedAt   DateTime?
 }

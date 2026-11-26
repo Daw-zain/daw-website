@@ -13,7 +13,8 @@ import { answerText } from "./AttemptReviewPage";
 type Row = { id: string; attemptNo: number; status: AttemptStatus; name: string; email: string; memberId: string; startedAt: string; submittedAt: string | null; score: number | null; maxScore: number | null; percent: number | null; passed: boolean | null; answeredCount: number; questionCount: number; needsManual: boolean; warnings: number };
 type List = { exam: { id: string; titleAr: string; titleEn: string; programId: string; folderId: string; resultsPolicy: string; resultsReleasedAt: string | null }; can: { grade: boolean; reopen: boolean; release: boolean }; attempts: Row[] };
 type DetailQ = { id: string; position: number; type: string; points: number; data: PublicQuestion; response: ReviewQuestion["response"]; flagged: boolean; score: number | null; manualScore: number | null; isCorrect: boolean | null; graderComment: string; answer: ReviewQuestion["answer"]; rubricAr: string | null };
-type Detail = Row & { questions: DetailQ[]; staffNote: string };
+type Detail = Row & { questions: DetailQ[]; staffNote: string; reviewFlag?: boolean };
+type ProctorEventRow = { kind: string; counted: boolean; detail: string; at: string };
 
 /** /[locale]/exams/attempts?id=<examId> — attempts and results for staff (needs canViewResults; enforced in the database) */
 export function StaffAttemptsPage(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -120,11 +121,38 @@ function DetailPanel({ d, can, examId, locale, labels, onClose, onAct }: { d: De
   );
   const [minutes, setMinutes] = useState("15");
   const [note, setNote] = useState("");
+  const pr = labels.proctor;
+  const [events, setEvents] = useState<ProctorEventRow[] | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+  useEffect(() => {
+    rpc<ProctorEventRow[]>("exam_attempt_events", { p_attempt: d.id }).then(setEvents).catch(() => setEvents([]));
+  }, [d.id, d.status]);
   return (
     <section className="card space-y-4 p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-navy">{d.name} · {labels.take.attemptNo} {d.attemptNo} · {labels.take.statuses[d.status]}</h2>
         <button type="button" onClick={onClose} className="btn btn-outline btn-sm">{sa.close}</button>
+      </div>
+      {d.status === "UNDER_REVIEW" && can.reopen && (
+        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-gold/40 bg-gold/5 p-3 text-sm">
+          <span className="font-semibold text-gold-600">{pr.held}</span>
+          <input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder={pr.releaseNote} className="field w-56 py-1.5" />
+          <button type="button" onClick={() => onAct(() => rpc("exam_attempt_clear_review", { p_attempt: d.id, p_note: reviewNote }))} className="btn btn-primary btn-sm">{pr.release}</button>
+        </div>
+      )}
+      <div className="rounded-xl border border-line p-3 text-sm">
+        <p className="font-semibold text-navy">{pr.eventsTitle} · {pr.warnings}: {d.warnings}</p>
+        {events === null ? null : events.length === 0 ? <p className="mt-1 text-slate">{pr.noEvents}</p> : (
+          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+            {events.map((ev, i) => (
+              <li key={i} className="flex flex-wrap gap-2">
+                <span className="text-slate" dir="ltr">{utcDate(ev.at)!.toLocaleTimeString(ar ? "ar-LY" : "en-GB")}</span>
+                <span className={ev.counted ? "font-semibold text-gold-600" : "text-ink"}>{(pr.events as Record<string, string>)[ev.kind] ?? ev.kind}</span>
+                {ev.counted && <span className="rounded bg-gold/10 px-1.5 text-xs text-gold-600">{pr.counted}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       {can.reopen && (
         <div className="flex flex-wrap items-end gap-2 rounded-xl bg-mist p-3 text-sm">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { evaluate, fmtNumber } from "@/lib/exams/calc";
+import { resumeProctor, suppressProctor } from "@/lib/exams/proctor";
 import { cn } from "@/lib/utils";
 import type { ExamLabels } from "./ExamShell";
 
@@ -231,7 +232,9 @@ export function Whiteboard({ storageKey, labels }: { storageKey: string; labels:
     e.preventDefault();
     const [x, y] = at(e);
     if (tool === "text") {
+      suppressProctor(120000); // the prompt dialog takes focus — not "leaving the exam"
       const s = window.prompt(wb.textPrompt);
+      resumeProctor();
       if (s && s.trim()) setEls((cur) => [...cur, { k: "text", x, y, s: s.slice(0, 200), c: color, size: 14 + width * 4 }]);
       return;
     }

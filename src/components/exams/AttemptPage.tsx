@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { AnswerInput, AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { Calculator, FloatingPanel, Whiteboard } from "./ExamTools";
+import { proctorSuppressed, type ProctorKind, type ProctorResult } from "@/lib/exams/proctor";
 
 const TEXT_TYPES = new Set(["SHORT", "ESSAY", "NUMERIC"]);
 
@@ -67,6 +68,69 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
     document.addEventListener("fullscreenchange", on);
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
+  // ── phase 8: proctoring (recorded and judged on the server) ──
+  const pr = labels.proctor;
+  const sec = initial.security ?? {};
+  const [warning, setWarning] = useState<{ text: string; count: string } | null>(null);
+  const [blockedNote, setBlockedNote] = useState(false);
+  const lastSent = useRef<Record<string, number>>({});
+  const report = useCallback(
+    async (kind: ProctorKind) => {
+      const now = Date.now();
+      if (now - (lastSent.current[kind] ?? 0) < 1500) return; // browser may fire the same event in bursts
+      lastSent.current[kind] = now;
+      try {
+        const r = await rpc<ProctorResult>("exam_attempt_event", { p_attempt: initial.id, p_kind: kind, p_detail: "" });
+        if (r.action === "submitted" || r.action === "closed") {
+          onClosed();
+          return;
+        }
+        if (r.counted) {
+          const count = r.maxWarnings > 0 ? pr.count.replace("{n}", String(r.warnings)).replace("{max}", String(r.maxWarnings)) : pr.countNoMax.replace("{n}", String(r.warnings));
+          setWarning({ text: `${kind === "FULLSCREEN_EXIT" ? pr.fullscreen : pr.left}${r.action === "review" ? ` ${pr.review}` : ""}`, count });
+        }
+      } catch {
+        /* offline or rate-limited: the server keeps its own count of what it received */
+      }
+    },
+    [initial.id, onClosed, pr],
+  );
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "hidden" && !proctorSuppressed()) report("HIDDEN"); };
+    const onBlur = () => { if (!document.hidden && !proctorSuppressed()) setTimeout(() => !document.hasFocus() && !proctorSuppressed() && report("BLUR"), 400); };
+    const onFs = () => { if (sec.fullscreen && !document.fullscreenElement && !proctorSuppressed()) report("FULLSCREEN_EXIT"); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "PrintScreen") report("PRINT");
+      if (sec.blockCopy && (e.ctrlKey || e.metaKey) && ["c", "x", "v", "a", "p", "s", "u"].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        setBlockedNote(true);
+        report("SHORTCUT");
+      }
+    };
+    if (sec.detectBlur) {
+      document.addEventListener("visibilitychange", onVis);
+      window.addEventListener("blur", onBlur);
+    }
+    document.addEventListener("fullscreenchange", onFs);
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", onKey, true);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("fullscreenchange", onFs);
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", onKey, true);
+    };
+  }, [report, sec.detectBlur, sec.fullscreen, sec.blockCopy]);
+  const guard = sec.blockCopy
+    ? {
+        onCopy: (e: React.ClipboardEvent) => { e.preventDefault(); setBlockedNote(true); report("COPY"); },
+        onCut: (e: React.ClipboardEvent) => { e.preventDefault(); setBlockedNote(true); report("COPY"); },
+        onPaste: (e: React.ClipboardEvent) => { e.preventDefault(); setBlockedNote(true); report("PASTE"); },
+        onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); report("CONTEXT_MENU"); },
+        onDragStart: (e: React.DragEvent) => e.preventDefault(),
+      }
+    : {};
   const toggleFs = () => {
     const p = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
     p?.catch(() => undefined);
@@ -150,7 +214,21 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
   // focused exam mode: a full-viewport layer above the site header/footer. Rendered into <body> through a
   // portal — the page wrapper has a CSS transform, which would otherwise trap "position: fixed" inside it.
   return createPortal(
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-mist" dir={ar ? "rtl" : "ltr"}>
+    <div
+      className={cn("fixed inset-0 z-[60] overflow-y-auto bg-mist", sec.blockCopy && "select-none [&_input]:select-text [&_textarea]:select-text")}
+      dir={ar ? "rtl" : "ltr"}
+      {...guard}
+    >
+      {/* watermark: learner + attempt id, faint, never blocks clicks */}
+      {sec.watermark && (
+        <div className="pointer-events-none fixed inset-0 z-[70] overflow-hidden" aria-hidden="true">
+          <div className="absolute -inset-1/2 flex rotate-[-24deg] flex-wrap content-start gap-x-24 gap-y-20 opacity-[0.07]">
+            {Array.from({ length: 120 }, (_, i) => (
+              <span key={i} className="whitespace-nowrap font-mono text-sm font-bold text-navy" dir="ltr">{initial.watermark}</span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* top bar */}
       <div className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[90rem] flex-wrap items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
@@ -276,6 +354,31 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
           </ul>
         </aside>
       </div>
+
+      {warning && (
+        <div className="fixed inset-0 z-[95] grid place-items-center bg-navy/70 p-4" role="alertdialog" aria-modal="true" aria-labelledby="warn-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <p id="warn-title" className="text-xl font-bold text-gold-600">⚠ {pr.warningTitle}</p>
+            <p className="mt-3 leading-7 text-ink">{warning.text}</p>
+            <p className="mt-2 font-semibold text-navy">{warning.count}</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              {sec.fullscreen && !fs && <button type="button" onClick={toggleFs} className="btn btn-primary">{pr.backToFullscreen}</button>}
+              <button type="button" onClick={() => setWarning(null)} className="btn btn-outline">{pr.ok}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {blockedNote && (
+        <button type="button" onClick={() => setBlockedNote(false)} className="fixed bottom-4 start-1/2 z-[95] -translate-x-1/2 rounded-xl bg-navy px-4 py-2.5 text-sm text-white shadow-xl rtl:translate-x-1/2">
+          {pr.blocked} ✕
+        </button>
+      )}
+      {sec.fullscreen && !fs && !warning && (
+        <div className="fixed inset-x-0 bottom-0 z-[85] flex flex-wrap items-center justify-center gap-3 bg-gold px-4 py-2 text-sm font-semibold text-white">
+          {pr.fullscreen.split(".")[0]}.
+          <button type="button" onClick={toggleFs} className="rounded-lg bg-white px-3 py-1 text-gold-600">{pr.backToFullscreen}</button>
+        </div>
+      )}
 
       {calc && (
         <FloatingPanel title={tl.calculator} onClose={() => setCalc(false)} start={{ x: 24, y: 90 }} width={300} closeLabel={tl.close}>

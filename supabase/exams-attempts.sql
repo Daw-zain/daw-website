@@ -227,6 +227,8 @@ begin
   where "id" = p_attempt;
   -- recalc turns SUBMITTED into COMPLETED when nothing needs manual grading
   perform public.exam_attempt_recalc(p_attempt);
+  -- phase 8: warnings exceeded with action REVIEW → the result is held for staff
+  update public."ExamAttempt" set "status" = 'UNDER_REVIEW' where "id" = p_attempt and "reviewFlag";
   perform public.exam_log('attempt.' || lower(p_status), 'ExamAttempt', p_attempt, (select "programId" from public."ExamAttempt" where "id" = p_attempt), null);
 end $$;
 
@@ -270,7 +272,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select p_attempt."status" not in ('IN_PROGRESS', 'CANCELLED') and exists (
+  select p_attempt."status" not in ('IN_PROGRESS', 'CANCELLED', 'UNDER_REVIEW') and exists (
     select 1 from public."Exam" e where e."id" = p_attempt."examId" and (
       e."resultsPolicy" = 'IMMEDIATE'
       or (e."resultsPolicy" = 'AFTER_CLOSE' and e."endsAt" is not null and now() > e."endsAt")
@@ -315,6 +317,7 @@ declare
   e public."Exam"; me public."ExamMember" := public.exam_current_member(); v_access text; v_used int; v_allowed int;
   v_reason text := null; v_open public."ExamAttempt"; a public."ExamAttempt";
 begin
+  perform public.exam_rate_hit('take_info', 60);
   select * into e from public."Exam" where "id" = p_exam;
   if e."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   v_access := public.exam_course_access(e."programId");
@@ -367,6 +370,7 @@ declare
   it record; r public."ExamRule"; v_rows jsonb := '[]'::jsonb; v_ids text[] := '{}'; v_draw record; v_attempt text;
   v_deadline timestamptz; rw record; v_pos int := 0; v_snap jsonb; v_imgs jsonb; v_scen jsonb := '{}'::jsonb; v_sid text;
 begin
+  perform public.exam_rate_hit('attempt_start', 10);
   if info ->> 'reason' = 'in_progress' then
     return jsonb_build_object('attemptId', info ->> 'openAttemptId', 'resumed', true);
   end if;
@@ -461,6 +465,7 @@ set search_path = public
 as $$
 declare a public."ExamAttempt" := public.exam_own_attempt(p_attempt); me public."ExamMember" := public.exam_current_member(); e public."Exam";
 begin
+  perform public.exam_rate_hit('attempt_state', 40);
   perform public.exam_attempt_enforce_time(p_attempt);
   select * into a from public."ExamAttempt" where "id" = p_attempt;
   select * into e from public."Exam" where "id" = a."examId";
@@ -489,6 +494,7 @@ set search_path = public
 as $$
 declare a public."ExamAttempt" := public.exam_own_attempt(p_attempt); q public."AttemptQuestion";
 begin
+  perform public.exam_rate_hit('attempt_save', 240);
   perform public.exam_attempt_enforce_time(p_attempt);
   select * into a from public."ExamAttempt" where "id" = p_attempt;
   if a."status" <> 'IN_PROGRESS' then raise exception 'attempt_closed' using errcode = '42501'; end if;
@@ -527,6 +533,7 @@ set search_path = public
 as $$
 declare a public."ExamAttempt" := public.exam_own_attempt(p_attempt); e public."Exam"; v_res boolean; v_rev boolean;
 begin
+  perform public.exam_rate_hit('attempt_review', 40);
   perform public.exam_attempt_enforce_time(p_attempt);
   select * into a from public."ExamAttempt" where "id" = p_attempt;
   select * into e from public."Exam" where "id" = a."examId";

@@ -296,7 +296,6 @@ end $$;
 create or replace function public.exam_bank_questions(p_program text, p_filter jsonb default '{}'::jsonb)
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = public
 as $$
@@ -307,6 +306,7 @@ declare
   v_size int := least(greatest(coalesce((f ->> 'pageSize')::int, 25), 1), 100);
   v_cat text := nullif(f ->> 'categoryId', '');
 begin
+  perform public.exam_rate_hit('bank_list', 240);
   if not public.exam_is_course_staff(p_program) then
     raise exception 'forbidden' using errcode = '42501';
   end if;
@@ -341,12 +341,12 @@ end $$;
 create or replace function public.exam_bank_question(p_id text)
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path = public
 as $$
 declare v_program text;
 begin
+  perform public.exam_rate_hit('bank_question', 240);
   select "programId" into v_program from public."Question" where "id" = p_id;
   if v_program is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   if not public.exam_is_course_staff(v_program) then
