@@ -127,7 +127,7 @@ export function QuestionEditor({
 
   const changeType = (type: QuestionType) => {
     const fresh = blankQuestion(type);
-    setQ((cur) => ({ ...fresh, stemAr: cur.stemAr, stemEn: cur.stemEn, status: cur.status, difficulty: cur.difficulty, points: cur.points, weight: cur.weight, domainId: cur.domainId, topicId: cur.topicId, subtopicId: cur.subtopicId, keywords: cur.keywords, reference: cur.reference, feedbackAr: cur.feedbackAr, feedbackEn: cur.feedbackEn, explanationAr: cur.explanationAr, explanationEn: cur.explanationEn }));
+    setQ((cur) => ({ ...fresh, stemAr: cur.stemAr, stemEn: cur.stemEn, status: cur.status, difficulty: cur.difficulty, points: cur.points, weight: cur.weight, domainId: cur.domainId, topicId: cur.topicId, subtopicId: cur.subtopicId, keywords: cur.keywords, reference: cur.reference, feedbackAr: cur.feedbackAr, feedbackEn: cur.feedbackEn, explanationAr: cur.explanationAr, explanationEn: cur.explanationEn, scenarioId: cur.scenarioId }));
   };
 
   const domains = categories.filter((c) => c.kind === "DOMAIN");
