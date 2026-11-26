@@ -794,7 +794,7 @@ const ar: Dictionary = {
       stop: "إيقاف",
       toDraft: "إعادة إلى المسودة",
       archive: "أرشفة",
-      delete: "حذف",
+      delete: "حذف الاختبار",
       confirmDelete: "حذف هذا الاختبار؟",
       preview: "معاينة سحب تجريبي",
       previewHint: "عينة عشوائية كما قد تظهر للمتدرب (مع مفتاح الإجابة، للفريق فقط).",

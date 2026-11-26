@@ -796,7 +796,7 @@ const en = {
       stop: "Stop",
       toDraft: "Back to draft",
       archive: "Archive",
-      delete: "Delete",
+      delete: "Delete exam",
       confirmDelete: "Delete this exam?",
       preview: "Preview a sample draw",
       previewHint: "A random sample as a learner might get it (with the answer key, for staff only).",
