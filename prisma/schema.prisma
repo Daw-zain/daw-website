@@ -91,6 +91,8 @@ model Program {
   examFolders     ExamFolder[]
   instructors     CourseInstructor[]
   enrollments     Enrollment[]
+  questionCategories QuestionCategory[]
+  questions       Question[]
 }
 
 model CourseSession {
@@ -452,4 +454,87 @@ model ExamAuditLog {
 
   @@index([createdAt])
   @@index([programId])
+}
+
+// ───────────── Exam system · Phase 3: question bank (one bank per course) ─────────────
+// Public parts of a question (stem, options) live in Question; everything that reveals the answer
+// (correct answer, scoring rules, feedback, explanation, option rationale) lives in QuestionSecret,
+// which only the exam_* functions read — and later phases never send it during an attempt.
+
+model QuestionCategory {
+  id          String             @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId   String
+  program     Program            @relation(fields: [programId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      QuestionCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    QuestionCategory[] @relation("CategoryTree")
+  kind        String // DOMAIN | TOPIC | SUBTOPIC
+  nameAr      String
+  nameEn      String             @default("")
+  sortOrder   Int                @default(0)
+  active      Boolean            @default(true)
+  createdById String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now()) @updatedAt
+  domainOf    Question[]         @relation("QuestionDomain")
+  topicOf     Question[]         @relation("QuestionTopic")
+  subtopicOf  Question[]         @relation("QuestionSubtopic")
+
+  @@index([programId])
+}
+
+model Question {
+  id          String            @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId   String
+  program     Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
+  type        String // MCQ | MULTI | TRUE_FALSE | NUMERIC | SHORT | ESSAY | ORDERING | MATCHING (more types in later phases)
+  status      String            @default("DRAFT") // DRAFT | ACTIVE | DISABLED
+  stemAr      String
+  stemEn      String            @default("")
+  content     Json              @default("{}") // public parts: options / items / matching lists (never the answer)
+  points      Decimal           @default(1) @db.Decimal(8, 2)
+  weight      Decimal           @default(1) @db.Decimal(8, 2)
+  difficulty  String            @default("MEDIUM") // EASY | MEDIUM | HARD
+  domainId    String?
+  domain      QuestionCategory? @relation("QuestionDomain", fields: [domainId], references: [id], onDelete: SetNull)
+  topicId     String?
+  topic       QuestionCategory? @relation("QuestionTopic", fields: [topicId], references: [id], onDelete: SetNull)
+  subtopicId  String?
+  subtopic    QuestionCategory? @relation("QuestionSubtopic", fields: [subtopicId], references: [id], onDelete: SetNull)
+  keywords    String[]          @default([])
+  reference   String            @default("")
+  version     Int               @default(1)
+  createdById String?
+  updatedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @default(now()) @updatedAt
+  secret      QuestionSecret?
+  versions    QuestionVersion[]
+
+  @@index([programId, status])
+}
+
+model QuestionSecret {
+  questionId      String   @id
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer          Json     @default("{}") // correct answer(s), per type
+  scoring         Json     @default("{}") // e.g. {"mode":"ALL_OR_NOTHING"|"PARTIAL"|"PARTIAL_PENALTY"}
+  feedbackAr      String   @default("")
+  feedbackEn      String   @default("")
+  explanationAr   String   @default("")
+  explanationEn   String   @default("")
+  optionRationale Json     @default("{}") // { optionId: { ar, en } }
+  updatedAt       DateTime @default(now()) @updatedAt
+}
+
+model QuestionVersion {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  version     Int
+  snapshot    Json // full question + secret as it was at this version (attempts will point here)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([questionId, version])
 }

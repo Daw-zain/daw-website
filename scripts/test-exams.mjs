@@ -50,6 +50,9 @@ try {
     ok("Learner not enrolled → course folders refused", /forbidden/.test(r.error), r.error);
 
     // 4. bootstrap the first admin (done once from the server side — never from the browser)
+    // Inside this rolled-back transaction the test admin is the ONLY admin (real admins are demoted
+    // temporarily and restored by the rollback) so the "last admin" rule can be tested.
+    await tx.$executeRawUnsafe(`update public."ExamMember" set "role"='LEARNER' where "role"='ADMIN'`);
     await tx.$executeRawUnsafe(`update public."ExamMember" set "role"='ADMIN' where "email"=$1`, users.admin.email);
     await as(users.admin);
     r = await call("select public.exam_me()");

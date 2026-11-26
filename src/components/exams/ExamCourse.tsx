@@ -104,7 +104,18 @@ function Folders({ locale, labels, programId, canSeePeople }: { locale: string; 
                 </div>
               </div>
               {(ar ? f.descAr : f.descEn) && <p className="mt-3 text-sm leading-6 text-slate">{ar ? f.descAr : f.descEn}</p>}
-              <p className="mt-auto rounded-lg bg-mist px-3 py-2 text-sm text-slate">{labels.course.empty[f.kind] ?? labels.course.empty.CUSTOM}</p>
+              {f.kind === "QUESTION_BANK" && f.count != null ? (
+                <div className="mt-auto flex items-center justify-between gap-3 pt-2">
+                  <span className="text-sm text-slate">
+                    <span className="text-lg font-bold text-navy">{f.count}</span> {labels.bank.total}
+                  </span>
+                  <Link href={`/${locale}/exams/bank?id=${encodeURIComponent(programId)}`} className="btn btn-primary btn-sm">
+                    {labels.bank.open}
+                  </Link>
+                </div>
+              ) : (
+                <p className="mt-auto rounded-lg bg-mist px-3 py-2 text-sm text-slate">{labels.course.empty[f.kind] ?? labels.course.empty.CUSTOM}</p>
+              )}
             </li>
           ))}
         </ul>

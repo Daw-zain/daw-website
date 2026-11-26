@@ -58,7 +58,7 @@ async function main() {
   const { PrismaClient } = await import("@prisma/client");
   const db = new PrismaClient();
   // setup.sql first (locks everything), then the exam system (adds its own functions and grants)
-  for (const file of ["supabase/setup.sql", "supabase/exams.sql"]) {
+  for (const file of ["supabase/setup.sql", "supabase/exams.sql", "supabase/exams-bank.sql"]) {
     const sql = readFileSync(path.join(process.cwd(), file), "utf8");
     for (const s of statements(sql)) await db.$executeRawUnsafe(s);
     console.log(`✔ Applied ${file}`);

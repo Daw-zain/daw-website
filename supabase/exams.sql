@@ -209,7 +209,11 @@ begin
   return (
     select coalesce(jsonb_agg(jsonb_build_object(
       'id', f."id", 'kind', f."kind", 'system', f."system", 'nameAr', f."nameAr", 'nameEn', f."nameEn",
-      'descAr', f."descAr", 'descEn', f."descEn", 'status', f."status") order by f."sortOrder", f."createdAt"), '[]'::jsonb)
+      'descAr', f."descAr", 'descEn', f."descEn", 'status', f."status",
+      -- staff see how many questions the bank holds (phase 3); learners never see the bank folder
+      'count', case when f."kind" = 'QUESTION_BANK' and v_access in ('ADMIN', 'INSTRUCTOR')
+                    then (select count(*) from public."Question" q where q."programId" = p_program) end
+      ) order by f."sortOrder", f."createdAt"), '[]'::jsonb)
     from public."ExamFolder" f
     where f."programId" = p_program
       and (v_access in ('ADMIN', 'INSTRUCTOR')
