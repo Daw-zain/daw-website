@@ -1,14 +1,14 @@
 import Link from "next/link";
-import Image from "next/image";
+import { BRAND } from "@/lib/brand";
 import type { ReactNode } from "react";
 import type { Dictionary } from "@/dictionaries/en";
-import { LogoPortrait } from "@/components/Logo";
+import { LogoMark } from "@/components/Logo";
 import { CheckIcon } from "@/components/Icons";
 import { cn } from "@/lib/utils";
 
 /**
  * Two-column layout for sign-in / sign-up / password pages:
- * brand panel (portrait, Aldaleel logo, what the account gives you) + the form card.
+ * brand panel (Aldaleel logo, what the account gives you) + the form card.
  */
 export function AuthShell({
   locale,
@@ -44,15 +44,13 @@ export function AuthShell({
           <div className="pointer-events-none absolute -bottom-28 -start-20 h-72 w-72 rounded-full bg-brand/40 blur-3xl" aria-hidden="true" />
           <div className="relative">
             <div className="flex items-center gap-4">
-              <LogoPortrait className="h-16 w-16" />
-              {partnerLogo && (
-                <>
-                  <span className="h-10 w-px bg-white/20" aria-hidden="true" />
-                  <span className="rounded-xl bg-white px-3 py-2 shadow-lg">
-                    <Image src={partnerLogo} alt={t.home.partnerName} width={114} height={80} className="h-9 w-auto" />
-                  </span>
-                </>
-              )}
+              <LogoMark light className="h-14" />
+              <span className="h-10 w-px bg-white/20" aria-hidden="true" />
+              <span className="font-[family-name:var(--font-display)] text-lg font-bold leading-tight text-white">
+                {locale === "ar" ? BRAND.nameAr : BRAND.nameEn}
+                <span className="block text-sm font-semibold text-gold">{locale === "ar" ? BRAND.unitAr : BRAND.unitEn}</span>
+              </span>
+
             </div>
             <p className="eyebrow mt-10 text-gold">{a.sideEyebrow}</p>
             <h2 className="mt-3 text-3xl font-bold leading-snug text-white xl:text-4xl">{a.sideTitle}</h2>
@@ -80,8 +78,9 @@ export function AuthShell({
         <div className="fade-up mx-auto w-full max-w-lg">
           <div className="card p-7 shadow-xl sm:p-10">
             <div className="flex items-center gap-3 lg:hidden">
-              <LogoPortrait className="h-12 w-12" />
-              {partnerLogo && <Image src={partnerLogo} alt={t.home.partnerName} width={114} height={80} className="h-9 w-auto" />}
+              <LogoMark className="h-10" />
+              <span className="font-[family-name:var(--font-display)] font-bold text-navy">{locale === "ar" ? BRAND.nameAr : BRAND.nameEn}</span>
+
             </div>
             {(mode === "login" || mode === "register") && (
               <nav className="mt-6 grid grid-cols-2 gap-1 rounded-xl border border-line bg-mist p-1 lg:mt-0" aria-label={a.sideEyebrow}>

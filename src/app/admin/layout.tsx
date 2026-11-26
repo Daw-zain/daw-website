@@ -4,7 +4,7 @@ import { inter, plexArabic } from "../fonts";
 import { getAdminLang } from "@/lib/admin-i18n";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Admin | Daw Zainelabideen", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Admin | Al Daleel Raqamee – Training & Consulting", robots: { index: false, follow: false } };
 
 export default async function AdminRoot({ children }: { children: React.ReactNode }) {
   const lang = await getAdminLang();

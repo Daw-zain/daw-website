@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getServices } from "@/lib/queries";
-import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMeta, providerRef } from "@/lib/seo";
 import { lines, pick, siteUrl } from "@/lib/utils";
 import { PageHero, JsonLd, ShareButtons } from "@/components/ui";
 import { Reveal } from "@/components/motion";
@@ -41,7 +41,7 @@ export default async function ServicePage({ params }: Props) {
       />
       <JsonLd
         data={[
-          { "@context": "https://schema.org", "@type": "Service", name: title, description: pick(s, "summary", locale), provider: { "@type": "Person", name: "Daw Zainelabideen" }, url: siteUrl(L(`/consulting/${slug}`)) },
+          { "@context": "https://schema.org", "@type": "Service", name: title, description: pick(s, "summary", locale), provider: providerRef(locale), url: siteUrl(L(`/consulting/${slug}`)) },
           breadcrumbJsonLd([{ name: t.common.breadcrumbHome, path: L("") }, { name: t.nav.consulting, path: L("/consulting") }, { name: title, path: L(`/consulting/${slug}`) }]),
         ]}
       />

@@ -4,7 +4,8 @@ import type { Metadata } from "next";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
-import { getCredentials, getPrograms, getResources, getServices, getStats, getTestimonials } from "@/lib/queries";
+import { getPrograms, getResources, getServices, getStats, getTestimonials } from "@/lib/queries";
+import { BRAND } from "@/lib/brand";
 import { pageMeta } from "@/lib/seo";
 import { pick } from "@/lib/utils";
 import { HeroBackdrop, HeroVisual } from "@/components/HeroVisual";
@@ -26,17 +27,15 @@ const PMI_PROGRAMS: Record<string, string> = {
   "PMI-RMP®": "pmi-rmp-exam-preparation",
 };
 const whyIcons = [AwardIcon, CapIcon, BuildingIcon, LayersIcon, TargetIcon, UsersIcon];
-const credIcons: Record<string, typeof ShieldIcon> = { PMP: ShieldIcon, "PMI-RMP": TargetIcon, "PMI-ACP": CycleIcon };
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: l } = await params;
   const locale = l as Locale;
   const t = getDictionary(locale);
-  const [settings, programs, services, credentials, stats, testimonials, resources] = await Promise.all([
+  const [settings, programs, services, stats, testimonials, resources] = await Promise.all([
     getSettings(),
     getPrograms(),
     getServices(),
-    getCredentials(),
     getStats(),
     getTestimonials(),
     getResources(),
@@ -45,8 +44,6 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const heroTitle = (locale === "ar" ? settings.heroTitleAr : settings.heroTitleEn)?.split("\n").filter(Boolean);
   const titleLines = heroTitle?.length ? heroTitle : t.home.heroTitle;
   const heroText = (locale === "ar" ? settings.heroTextAr : settings.heroTextEn) || t.home.heroText;
-  const pro = credentials.filter((c) => c.kind === "PROFESSIONAL");
-  const academic = credentials.filter((c) => c.kind === "ACADEMIC");
   const featured = [...programs.filter((p) => p.featured), ...programs.filter((p) => !p.featured)].slice(0, 6);
 
   return (
@@ -62,18 +59,11 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
         <div className="container-x grid items-center gap-14 pb-24 pt-14 sm:pt-20 lg:grid-cols-[1.15fr_1fr] lg:pb-28">
           <div>
-            {settings.partnerLogo && (
-              <div className="fade-up group mb-8 inline-flex items-center gap-4 rounded-2xl bg-white px-4 py-3 shadow-xl ring-1 ring-white/30 transition hover:-translate-y-0.5 hover:shadow-2xl sm:px-5">
-                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={114} height={80} priority className="h-12 w-auto transition-transform duration-300 group-hover:scale-105 sm:h-16" />
-                <span className="h-10 w-px bg-line sm:h-12" aria-hidden="true" />
-                <span className="text-sm font-bold leading-snug text-[#353a98] sm:text-base">{t.home.partnerName}</span>
-              </div>
-            )}
             <p className="eyebrow fade-up text-gold">{t.home.eyebrow}</p>
             <h1 className="mt-5 space-y-3 text-[2.05rem] font-bold leading-[1.35] text-white sm:space-y-4 sm:text-5xl lg:text-[3.4rem]">
               {titleLines.map((line, i) => (
                 <span key={i} className="fade-up block" style={{ animationDelay: `${100 + i * 120}ms` }}>
-                  <span className={i === titleLines.length - 1 ? "bg-gradient-to-r from-gold via-[#e2c78f] to-gold bg-clip-text text-transparent" : undefined}>{line}</span>
+                  <span className={i === titleLines.length - 1 ? "bg-gradient-to-r from-gold via-[#ff7a7d] to-gold bg-clip-text text-transparent" : undefined}>{line}</span>
                 </span>
               ))}
             </h1>
@@ -93,7 +83,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
             </div>
             <div className="fade-up" style={{ animationDelay: "650ms" }}>
               <ul className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/70">
-                {["PMP®", "PMI-RMP®", "PMI-ACP®", locale === "ar" ? "جامعة برمنغهام" : "University of Birmingham"].map((x) => (
+                {["PMP®", "PMI-RMP®", "PMI-ACP®", "CAPM®"].map((x) => (
                   <li key={x} className="inline-flex items-center gap-2">
                     <CheckIcon className="h-4 w-4 text-gold" />
                     <span dir="auto">{x}</span>
@@ -102,37 +92,16 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               </ul>
             </div>
           </div>
-          <HeroVisual image={settings.heroImage || undefined} alt={t.home.portraitAlt} labels={{ a: "PMP®", b: "PMI-RMP®", c: "PMI-ACP®" }} badges={["PMP", "PMI-RMP", "PMI-ACP"].map((code) => pro.find((c) => c.code === code)?.image)} />
-        </div>
-      </section>
-
-      {/* ───────────── CREDENTIALS STRIP ───────────── */}
-      <section className="relative z-10 -mt-12">
-        <div className="container-x">
-          <div className="card grid gap-px overflow-hidden bg-line md:grid-cols-3">
-            {pro.map((c, i) => {
-              const Icon = credIcons[c.code ?? ""] ?? AwardIcon;
-              return (
-                <Reveal key={c.id} delay={i * 0.08} className="group bg-white p-6 transition hover:bg-sky-50">
-                  <div className="flex items-start gap-4">
-                    {c.image ? (
-                      <Image src={c.image} alt={pick(c, "title", locale)} width={64} height={64} className="h-16 w-16 shrink-0 rounded-full object-cover transition group-hover:scale-110" />
-                    ) : (
-                      <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-navy text-gold transition group-hover:scale-110">
-                        <Icon className="h-6 w-6" />
-                      </span>
-                    )}
-                    <div>
-                      <p className="text-lg font-bold text-navy" dir="ltr">
-                        {c.code}®
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-slate">{pick(c, "title", locale)}</p>
-                    </div>
-                  </div>
-                </Reveal>
-              );
-            })}
-          </div>
+          <HeroVisual
+            logo={BRAND.logoWhite}
+            logoAlt={locale === "ar" ? BRAND.legalAr : BRAND.legalEn}
+            atpBadge={settings.atpBadge || undefined}
+            atpLabel={t.home.atpTitle}
+            title={t.pmi.offered}
+            tracks={Object.entries(PMI_PROGRAMS).map(([code, slug]) => ({ code, slug, p: programs.find((x) => x.slug === slug) }))
+              .filter((x) => x.p)
+              .map((x) => ({ code: x.code, label: pick(x.p!, "title", locale), href: L(`/programs/${x.slug}`) }))}
+          />
         </div>
       </section>
 
@@ -161,22 +130,6 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <Link href={L("/programs?category=certification")} className="btn btn-primary shrink-0 sm:ms-auto">
                   {t.cta.explore}
                 </Link>
-              </div>
-            </Reveal>
-          </div>
-        </section>
-      )}
-      {/* ───────────── ALDALEEL RAQAMEE ───────────── */}
-      {settings.partnerLogo && (
-        <section className="pt-6">
-          <div className="container-x">
-            <Reveal className="group flex flex-col items-center gap-5 rounded-3xl border border-line bg-white p-6 text-center shadow-card transition hover:border-[#353a98]/30 hover:shadow-lift sm:flex-row sm:p-7 sm:text-start">
-              <div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-2xl bg-white p-2 ring-1 ring-line transition-transform duration-500 group-hover:scale-105">
-                <Image src={settings.partnerLogo} alt={t.home.partnerName} width={112} height={79} className="h-full w-full object-contain" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-[#353a98]">{t.home.partnerName}</h2>
-                <p className="mt-1 leading-7 text-slate">{t.home.partnerText}</p>
               </div>
             </Reveal>
           </div>
@@ -235,50 +188,44 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           </div>
         </div>
       </section>
-      {/* ───────────── ABOUT SNAPSHOT + ACADEMIC ───────────── */}
+      {/* ───────────── ABOUT SNAPSHOT ───────────── */}
       <section className="py-24">
         <div className="container-x grid gap-12 lg:grid-cols-2 lg:items-center">
           <div>
-            <SectionHeading eyebrow={t.nav.about} title={locale === "ar" ? "ضو زين العابدين" : "Daw Zainelabideen"} text={t.about.intro} />
+            <SectionHeading eyebrow={t.nav.about} title={locale === "ar" ? BRAND.siteAr : BRAND.siteEn} text={t.about.intro} />
             <Reveal delay={0.1}>
               <p className="lead mt-5">{t.about.bio[1]}</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href={L("/about")} className="btn btn-primary">
                   {t.common.learnMore}
                 </Link>
-                <Link href={settings.cvUrl || L("/cv")} className="btn btn-outline" {...(settings.cvUrl ? { target: "_blank" } : {})}>
-                  {t.cta.cv}
-                </Link>
+                <a href={BRAND.companyUrl} target="_blank" rel="noopener" className="btn btn-outline">
+                  {t.about.companyLink} ↗
+                </a>
               </div>
             </Reveal>
           </div>
           <Reveal delay={0.15}>
             <div className="relative rounded-3xl bg-mist p-8">
               <div className="grid-bg-dark absolute inset-0 rounded-3xl" aria-hidden="true" />
-              <h3 className="relative flex items-center gap-2 text-lg font-bold">
-                <CapIcon className="h-6 w-6 text-brand" />
-                {t.home.academicTitle}
-              </h3>
-              <ol className="relative mt-6 space-y-6 border-s-2 border-brand/20 ps-6">
-                {[
-                  ...academic.map((c) => ({ key: c.id, year: c.year ?? 0, when: pick(c, "description", locale) || String(c.year ?? ""), title: pick(c, "title", locale), sub: pick(c, "issuer", locale), dot: "bg-gold" })),
-                  { key: "career", year: 1990, when: locale === "ar" ? "1990 – الآن" : "1990 – present", title: t.about.experience[0].title, sub: "", dot: "bg-brand" },
-                ]
-                  .sort((a, b) => a.year - b.year)
-                  .map((it) => (
-                    <li key={it.key} className="relative">
-                      <span className={`absolute -start-[33px] top-1 h-4 w-4 rounded-full border-4 border-mist ${it.dot}`} aria-hidden="true" />
-                      <p className="text-sm font-bold text-brand">{it.when}</p>
-                      <p className="mt-1 font-semibold text-navy">{it.title}</p>
-                      {it.sub && <p className="text-sm text-slate">{it.sub}</p>}
-                    </li>
-                  ))}
-              </ol>
+              <h3 className="relative text-lg font-bold">{t.about.philosophyTitle}</h3>
+              <ul className="relative mt-6 space-y-5">
+                {t.about.philosophy.map((p) => (
+                  <li key={p.title} className="flex gap-3">
+                    <span className="mt-1 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gold text-white">
+                      <CheckIcon className="h-3.5 w-3.5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-navy">{p.title}</p>
+                      <p className="mt-0.5 text-sm leading-6 text-slate">{p.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           </Reveal>
         </div>
       </section>
-
       {/* ───────────── PROGRAMS ───────────── */}
       <section className="bg-mist py-24">
         <div className="container-x">

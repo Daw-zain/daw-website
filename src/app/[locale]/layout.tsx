@@ -2,7 +2,7 @@ import "../globals.css";
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { notFound } from "next/navigation";
-import { inter, plexArabic } from "../fonts";
+import { alexandria, inter, plexArabic } from "../fonts";
 import { isLocale } from "@/lib/constants";
 import { dir, getDictionary } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
@@ -12,7 +12,8 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { MotionProvider } from "@/components/motion";
 import { JsonLd, WhatsAppFloat } from "@/components/ui";
-import { pageMeta, personJsonLd, serviceProviderJsonLd } from "@/lib/seo";
+import { organizationJsonLd, pageMeta, serviceProviderJsonLd } from "@/lib/seo";
+import { BRAND } from "@/lib/brand";
 import { siteUrl } from "@/lib/utils";
 
 // Pages read live data (admin edits appear immediately), so render on request.
@@ -24,8 +25,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     metadataBase: new URL(siteUrl()),
     ...pageMeta({ locale, path: "/" }),
-    applicationName: "Daw Zainelabideen",
-    authors: [{ name: "Daw Zainelabideen" }],
+    applicationName: BRAND.siteEn,
+    authors: [{ name: BRAND.legalEn, url: BRAND.companyUrl }],
     keywords:
       locale === "ar"
         ? ["دورة PMP ليبيا", "تدريب إدارة المشروعات", "مدرب PMP", "دورة إدارة المخاطر", "إدارة المشروعات", "PMI-RMP", "PMI-ACP", "استشارات إدارة المشروعات"]
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 export const viewport: Viewport = {
-  themeColor: "#102A43",
+  themeColor: "#06152A",
   width: "device-width",
   initialScale: 1,
 };
@@ -48,17 +49,17 @@ export default async function LocaleLayout({ children, params }: { children: Rea
   const sameAs = [settings.linkedin, settings.facebook, settings.youtube].filter(Boolean);
 
   return (
-    <html lang={locale} dir={dir(locale)} className={`${inter.variable} ${plexArabic.variable}`}>
+    <html lang={locale} dir={dir(locale)} className={`${inter.variable} ${plexArabic.variable} ${alexandria.variable}`}>
       <body className="flex min-h-screen flex-col">
         <MotionProvider>
-          <Header locale={locale} t={{ nav: t.nav, meta: t.meta }} signedIn={!!user} partnerLogo={settings.partnerLogo || undefined} />
+          <Header locale={locale} t={{ nav: t.nav, meta: t.meta }} signedIn={!!user} />
           <main id="main" className="flex-1">
             {children}
           </main>
           <Footer locale={locale} t={t} settings={settings} programs={programs.map((p) => ({ slug: p.slug, title: locale === "ar" ? p.titleAr : p.titleEn }))} />
           <WhatsAppFloat number={settings.whatsapp} text={locale === "ar" ? settings.whatsappMessageAr : settings.whatsappMessageEn} label={t.common.sendInquiry} />
         </MotionProvider>
-        <JsonLd data={[personJsonLd(locale, { image: settings.heroImage || undefined, sameAs }), serviceProviderJsonLd(locale, { email: settings.contactEmail, phone: settings.phone })]} />
+        <JsonLd data={[organizationJsonLd(locale, { sameAs }), serviceProviderJsonLd(locale, { email: settings.contactEmail, phone: settings.phone })]} />
         {gaId && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} strategy="afterInteractive" />

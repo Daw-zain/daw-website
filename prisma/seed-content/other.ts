@@ -97,22 +97,12 @@ export const services = [
   },
 ];
 
-export const credentials = [
-  { kind: "PROFESSIONAL", code: "PMP", image: "/images/brand/badge-pmp.jpg", titleAr: "محترف إدارة المشروعات (PMP)®", titleEn: "Project Management Professional (PMP)®", issuerAr: "معهد إدارة المشروعات (PMI)", issuerEn: "Project Management Institute (PMI)", descriptionAr: "شهادة عالمية في إدارة المشروعات تغطي المناهج التنبؤية والرشيقة والهجينة.", descriptionEn: "A globally recognized project management certification covering predictive, agile and hybrid approaches.", order: 1 },
-  { kind: "PROFESSIONAL", code: "PMI-RMP", image: "/images/brand/badge-pmi-rmp.jpg", titleAr: "محترف إدارة المخاطر (PMI-RMP)®", titleEn: "PMI Risk Management Professional (PMI-RMP)®", issuerAr: "معهد إدارة المشروعات (PMI)", issuerEn: "Project Management Institute (PMI)", descriptionAr: "شهادة متخصصة في تحديد مخاطر المشروعات وتقييمها وإدارتها.", descriptionEn: "A specialist certification in identifying, assessing and managing project risk.", order: 2 },
-  { kind: "PROFESSIONAL", code: "PMI-ACP", image: "/images/brand/badge-pmi-acp.jpg", titleAr: "الممارس المعتمد في المنهجيات الرشيقة (PMI-ACP)®", titleEn: "PMI Agile Certified Practitioner (PMI-ACP)®", issuerAr: "معهد إدارة المشروعات (PMI)", issuerEn: "Project Management Institute (PMI)", descriptionAr: "شهادة تغطي المبادئ والممارسات وأطر العمل الرشيقة المتعددة.", descriptionEn: "A certification covering agile principles, practices and multiple frameworks.", order: 3 },
-  { kind: "ACADEMIC", code: "BEng", titleAr: "بكالوريوس الهندسة – هندسة الحاسوب", titleEn: "BEng in Computer Engineering", issuerAr: "جامعة برمنغهام، المملكة المتحدة", issuerEn: "University of Birmingham, UK", year: 1989, descriptionAr: "يوليو 1989", descriptionEn: "July 1989", order: 4 },
-  { kind: "ACADEMIC", code: "MSc", titleAr: "ماجستير إدارة المشروعات الهندسية", titleEn: "MSc in Engineering Project Management", issuerAr: "أكاديمية الدراسات العليا", issuerEn: "Post Graduate Studies Academy", year: 2008, descriptionAr: "مايو 2008", descriptionEn: "May 2008", order: 5 },
-];
+// The site represents Al Daleel Raqamee (company) — no personal credentials or personal statistics are seeded.
+// Add verified company accreditations / numbers from the admin (Credentials, Stats).
+import type { Prisma } from "@prisma/client";
+export const credentials: Prisma.CredentialCreateInput[] = [];
 
-// Only facts supplied by the owner. Add more verified numbers from Admin → Stats.
-export const stats = [
-  { value: 3, labelAr: "شهادات مهنية من PMI", labelEn: "PMI professional certifications", source: "PMP, PMI-RMP, PMI-ACP", animate: true, order: 1 },
-  { value: 1990, labelAr: "بداية المسيرة المهنية", labelEn: "Professional career since", source: "Owner brief", animate: false, order: 2 },
-  { value: 2015, labelAr: "تطوير الأعمال في تقنية المعلومات والنظم الجغرافية منذ", labelEn: "Business development in IT & GIS since", source: "Owner brief", animate: false, order: 3 },
-  { value: 2, labelAr: "درجات أكاديمية في الهندسة وإدارة المشروعات", labelEn: "Academic degrees in engineering & project management", source: "BEng 1989, Master's 2008", animate: true, order: 4 },
-];
-
+export const stats: Prisma.StatCreateInput[] = [];
 export const faqs = [
   { scope: "general", questionAr: "هل البرامج متاحة بالعربية أم بالإنجليزية؟", questionEn: "Are the programs delivered in Arabic or English?", answerAr: "تُقدَّم البرامج بالعربية مع استخدام المصطلحات الإنجليزية المعتمدة في الاختبارات، ويمكن تقديمها بالإنجليزية للمؤسسات عند الطلب.", answerEn: "Programs are delivered in Arabic using the official English exam terminology, and can be delivered fully in English for organizations on request." },
   { scope: "general", questionAr: "هل يمنح البرنامج شهادة PMP®؟", questionEn: "Does the program award the PMP® certification?", answerAr: "لا. شهادات PMP® وPMI-RMP® وPMI-ACP® تمنحها PMI فقط بعد اجتياز الاختبار. يحصل المشارك على شهادة إتمام تدريبية خاصة بالبرنامج توثّق ساعات التدريب.", answerEn: "No. PMP®, PMI-RMP® and PMI-ACP® certifications are awarded only by PMI after passing the exam. Participants receive a program-specific certificate of completion documenting training hours." },
@@ -125,13 +115,10 @@ export const faqs = [
 
 // Initial site settings (only applied when a setting doesn't exist yet; edit later in Admin → Settings)
 export const settings: Record<string, string> = {
-  heroImage: "/images/brand/daw-zainelabideen-portrait.jpg",
-  aboutImage: "/images/brand/daw-zainelabideen-portrait.jpg",
   atpBadge: "/images/brand/pmi-authorized-training-partner.png",
-  partnerLogo: "/images/brand/aldaleel-raqamee-logo.png",
   contactEmail: "training@aldaleel.ly",
   adminNotifyEmail: "training@aldaleel.ly",
-  phone: "+218 91 218 6622",
-  whatsapp: "218912186622",
-  linkedin: "https://www.linkedin.com/in/daw-zainelabideen",
+  phone: "+218 91 1647676",
+  addressAr: "شارع يوسف بن تاشفين، حي الأندلس، طرابلس، ليبيا",
+  addressEn: "Youssef Bin Tashfin St., Al-Andalus, Tripoli, Libya",
 };

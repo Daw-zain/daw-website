@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getFaqs, getServices } from "@/lib/queries";
-import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMeta, providerRef } from "@/lib/seo";
 import { pick } from "@/lib/utils";
 import { PageHero, JsonLd, SectionHeading } from "@/components/ui";
 import { ServiceCard } from "@/components/cards";
@@ -34,7 +34,7 @@ export default async function Consulting({ params }: { params: Promise<{ locale:
       <JsonLd
         data={[
           breadcrumbJsonLd([{ name: t.common.breadcrumbHome, path: L("") }, { name: t.nav.consulting, path: L("/consulting") }]),
-          ...services.map((s) => ({ "@context": "https://schema.org", "@type": "Service", name: pick(s, "title", locale), description: pick(s, "summary", locale), provider: { "@type": "Person", name: "Daw Zainelabideen" }, areaServed: "Libya" })),
+          ...services.map((s) => ({ "@context": "https://schema.org", "@type": "Service", name: pick(s, "title", locale), description: pick(s, "summary", locale), provider: providerRef(locale), areaServed: "Libya" })),
         ]}
       />
 

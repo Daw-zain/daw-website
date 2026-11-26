@@ -1,4 +1,4 @@
-// Daw Zainelabideen – data model
+// Al Daleel Raqamee – Training & Consulting – data model
 // Development uses SQLite. For production run `npm run db:use-postgres` to switch the provider.
 // Enum-like fields are stored as strings (see src/lib/constants.ts) so the schema is portable.
 

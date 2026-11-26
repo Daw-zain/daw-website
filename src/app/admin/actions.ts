@@ -218,7 +218,7 @@ export async function deleteRequest(type: string, id: string) {
 
 // ───────────── Settings ─────────────
 
-const SETTING_UPLOADS: Partial<Record<SettingKey, "image" | "file">> = { heroImage: "image", aboutImage: "image", atpBadge: "image", partnerLogo: "image", cvUrl: "file" };
+const SETTING_UPLOADS: Partial<Record<SettingKey, "image" | "file">> = { atpBadge: "image" };
 
 export async function saveSettings(form: FormData): Promise<AdminResult> {
   const user = await requireStaff("ADMIN");
@@ -305,7 +305,7 @@ export async function sendTestEmail(_prev: AdminResult, form: FormData): Promise
   try {
     await sendMail({
       to,
-      subject: "Test email – Daw Zainelabideen website / رسالة اختبار",
+      subject: "Test email – Al Daleel Raqamee Training website / رسالة اختبار",
       html: emailLayout(
         "SMTP is working · البريد يعمل",
         `<p>This test email confirms that the website can send notifications.</p><p dir="rtl">تؤكد هذه الرسالة أن الموقع قادر على إرسال الإشعارات.</p><p style="color:#52606D;font-size:13px">${new Date().toISOString()}</p>`,

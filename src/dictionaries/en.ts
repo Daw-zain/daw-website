@@ -1,20 +1,19 @@
 const en = {
   meta: {
-    siteName: "Daw Zainelabideen",
-    tagline: "Project Management Trainer & Consultant",
-    defaultTitle: "Daw Zainelabideen | PMP, RMP & ACP Training and Project Management Consulting",
+    siteName: "Al Daleel Raqamee – Training & Consulting",
+    tagline: "Project Management Training & Consulting",
+    defaultTitle: "Al Daleel Raqamee Training & Consulting | PMP, RMP, ACP & CAPM Exam Preparation",
     defaultDescription:
-      "Project management training and consulting by Daw Zainelabideen (PMP®, PMI-RMP®, PMI-ACP®): PMP, RMP and ACP exam preparation, Agile and hybrid delivery, risk management, PMO and corporate training in Libya and the Arab region.",
+      "The training and consulting arm of Al Daleel Raqamee for IT & GIS, a PMI® Authorized Training Partner: PMP, PMI-RMP, PMI-ACP and CAPM exam preparation, agile and hybrid delivery, risk management, PMO consulting and corporate training in Libya.",
   },
   nav: {
     home: "Home",
-    about: "About",
+    about: "About us",
     programs: "Training Programs",
     consulting: "Consulting",
     corporate: "Corporate Training",
     knowledge: "Knowledge Hub",
     calendar: "Training Calendar",
-    credentials: "Credentials",
     contact: "Contact",
     search: "Search",
     enroll: "Enroll Now",
@@ -52,8 +51,7 @@ const en = {
     explore: "Explore Training Programs",
     corporate: "Request Corporate Training",
     consult: "Book a Consultation",
-    cv: "Download CV",
-    contact: "Contact the Trainer",
+    contact: "Contact us",
     registerInterest: "Register Your Interest",
   },
   status: {
@@ -106,12 +104,10 @@ const en = {
     },
   },
   home: {
-    eyebrow: "Project Management Training & Consulting",
+    eyebrow: "Al Daleel Raqamee · Training & Consulting",
     heroTitle: ["Develop Your Skills.", "Deliver Your Projects with Confidence.", "Achieve Sustainable Value."],
     heroText:
-      "I help professionals and organizations master project, risk and agile management — from passing PMI certification exams to building governance and PMOs that deliver measurable results.",
-    credentialsTitle: "PMI-certified across three disciplines",
-    academicTitle: "Academic foundation",
+      "We help professionals and organizations master project, risk and agile management — from passing PMI certification exams to building governance and PMOs that deliver measurable results.",
     programsEyebrow: "Training Programs",
     programsTitle: "Programs built for real projects — and real exams",
     programsText:
@@ -120,20 +116,20 @@ const en = {
     consultingTitle: "Consulting that turns methodology into results",
     consultingText:
       "Practical support to establish, assess and improve the way your organization delivers projects.",
-    whyEyebrow: "Why learn with me?",
-    whyTitle: "Experience that bridges engineering, business and training",
+    whyEyebrow: "Why train with Al Daleel?",
+    whyTitle: "A PMI® Authorized Training Partner backed by real technology projects",
     why: [
       {
-        title: "Three PMI certifications",
-        text: "PMP®, PMI-RMP® and PMI-ACP®: predictive, risk and agile perspectives in one trainer.",
+        title: "PMI® Authorized Training Partner",
+        text: "Exam preparation aligned with PMI's current exam content outlines for PMP®, PMI-RMP®, PMI-ACP® and CAPM®.",
       },
       {
-        title: "Engineering & academic depth",
-        text: "BEng in Computer Engineering (University of Birmingham, UK) and a Master's in Engineering Project Management.",
+        title: "PMI-certified instructors",
+        text: "Programs led by instructors who hold PMI certifications and hands-on project delivery experience.",
       },
       {
-        title: "Real-world business experience",
-        text: "Professional career since 1990, including business development in IT and GIS since 2015.",
+        title: "Real project experience",
+        text: "Built on Al Daleel Raqamee's work in IT, GIS and digital transformation projects since 2013.",
       },
       {
         title: "Sector-aware training",
@@ -153,10 +149,8 @@ const en = {
     corporateText:
       "From training-needs assessment to measuring impact — tailored programs for government entities, banks, oil & gas, IT and private companies, delivered on-site or online.",
     statsTitle: "Milestones",
-    partnerName: "Aldaleel Raqamee for IT & GIS",
-    partnerText: "Business Development Manager at Aldaleel Raqamee for Information Technology and Geographic Information Systems since 2015.",
     atpTitle: "PMI® Authorized Training Partner",
-    atpText: "Exam preparation for PMP®, PMI-RMP®, PMI-ACP® and CAPM® led by a trainer who holds three PMI certifications.",
+    atpText: "Al Daleel Raqamee offers exam preparation for PMP®, PMI-RMP®, PMI-ACP® and CAPM® as a PMI® Authorized Training Partner.",
     testimonialsEyebrow: "Testimonials",
     testimonialsTitle: "What participants say",
     latestEyebrow: "Knowledge Hub",
@@ -166,7 +160,6 @@ const en = {
       "Enroll in an upcoming program, request a tailored corporate program, or book a consultation.",
     newsletterTitle: "Project management insights in your inbox",
     newsletterText: "Practical tips, exam guidance and announcements of new programs. No spam — unsubscribe any time.",
-    portraitAlt: "Daw Zainelabideen – Project Management Trainer & Consultant",
   },
   pmi: {
     eyebrow: "About PMI",
@@ -187,33 +180,27 @@ const en = {
     ],
     offered: "Preparation programs available",
     note: "PMI certifications are awarded only by PMI to candidates who meet its eligibility requirements and pass the exam.",
-  },  about: {
-    title: "About Daw Zainelabideen",
-    intro:
-      "Project Management Trainer & Consultant holding PMP®, PMI-RMP® and PMI-ACP® certifications, with an engineering background and a professional career that began in 1990.",
-    bioTitle: "Professional biography",
+  },
+  about: {
+    title: "About us",
+    intro: "Al Daleel Raqamee – Training & Consulting is the project management training and consulting arm of Al Daleel Raqamee for IT & GIS.",
+    bioTitle: "Who we are",
     bio: [
-      "I am a project management trainer and consultant who combines an engineering education with decades of professional practice. I earned my BEng in Computer Engineering from the University of Birmingham, UK in July 1989, and an MSc in Engineering Project Management from the Post Graduate Studies Academy in May 2008.",
-      "My professional career began in 1990. Between 1991 and 1998 I delivered training and professional lectures, and since 2015 I have worked in business development and the management of commercial activities in the information technology and geographic information systems (GIS) sector.",
-      "I hold three certifications from the Project Management Institute (PMI): Project Management Professional (PMP)®, PMI Risk Management Professional (PMI-RMP)® and PMI Agile Certified Practitioner (PMI-ACP)®. Today I focus on training and professional development in project, risk and agile management, and on consulting for organizations working in IT, digital transformation, banking and government.",
+      "Al Daleel Raqamee (AL DALEEL) is a Libyan company founded in 2013 that delivers integrated technology solutions in information technology, geographic information systems and digital transformation.",
+      "Through its training and consulting services, the company helps professionals and organizations build project management capability: PMI certification exam preparation, practical programs in project, risk and agile management, corporate training and PMO consulting.",
+      "As a PMI® Authorized Training Partner, we deliver preparation programs aligned with PMI's published exam content outlines, combined with practical experience from technology projects in our region.",
     ],
-    academicTitle: "Academic background",
-    certsTitle: "Professional certifications",
-    experienceTitle: "Professional experience",
-    experience: [
-      { period: "1990 – present", title: "Professional career", text: "Engineering and technology roles across a professional career that began in 1990." },
-      { period: "1991 – 1998", title: "Training & professional lectures", text: "Delivered training and professional lectures." },
-      { period: "2015 – present", title: "Business development – IT & GIS", text: "Business development and management of commercial activities in information technology and geographic information systems." },
-      { period: "Current", title: "Project management training & consulting", text: "Training and professional qualification in project management, risk management and agile methodologies." },
-    ],
-    philosophyTitle: "Training philosophy",
+    companyTitle: "Part of Al Daleel Raqamee",
+    companyText: "To learn more about the company, its services, partners and sectors, visit the main website.",
+    companyLink: "Visit aldaleel.ly",
+    philosophyTitle: "Our training approach",
     philosophy: [
       { title: "Understanding before memorizing", text: "Concepts are explained through their purpose, so participants can answer scenario-based questions and apply them at work." },
       { title: "Practice on real situations", text: "Case studies, workshops and exercises based on the realities of projects in our region." },
       { title: "Exam readiness with integrity", text: "Preparation follows PMI's published exam content outlines and code of ethics — no shortcuts, no brain dumps." },
       { title: "Continuous support", text: "Guidance on the application process, a study plan, and follow-up until exam day." },
     ],
-    methodTitle: "How I work",
+    methodTitle: "How we work",
     method: [
       { title: "Assess", text: "Understand participants' level, goals and context." },
       { title: "Design", text: "Shape the program, materials and practice plan." },
@@ -228,11 +215,9 @@ const en = {
       "PMO and project governance",
       "Planning, scheduling and control",
       "Digital transformation and IT projects",
+      "GIS and technology project management",
       "AI applications in project management",
-      "Business development in IT & GIS",
     ],
-    cvTitle: "Curriculum vitae",
-    cvText: "Download a summary of qualifications, certifications and experience.",
   },
   programs: {
     title: "Training Programs",
@@ -254,7 +239,7 @@ const en = {
     seatsLeft: "seats left",
     seatsTba: "Seats: to be announced",
     pmiNote:
-      "This is an independent preparation program. PMI certifications are awarded only by the Project Management Institute after the candidate meets PMI's eligibility requirements and passes the exam.",
+      "PMI certifications are awarded only by the Project Management Institute after the candidate meets PMI's eligibility requirements and passes the exam.",
     related: "Other programs",
   },
   consulting: {
@@ -323,17 +308,6 @@ const en = {
     next: "Next month",
     today: "Today",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-  },
-  credentials: {
-    title: "Credentials",
-    intro: "Academic qualifications and professional certifications.",
-    professional: "Professional certifications",
-    academic: "Academic qualifications",
-    verify: "Verify on the PMI Certification Registry",
-    verifyNote:
-      "PMI certifications can be verified independently through PMI's online Certification Registry.",
-    issued: "Issued",
-    id: "Credential ID",
   },
   contact: {
     title: "Contact",
@@ -472,7 +446,8 @@ const en = {
   },
   footer: {
     about:
-      "Project management training and consulting: PMP®, PMI-RMP® and PMI-ACP® exam preparation, agile and hybrid delivery, risk management and corporate programs.",
+      "The training and consulting arm of Al Daleel Raqamee for IT & GIS: PMP®, PMI-RMP®, PMI-ACP® and CAPM® exam preparation, agile and hybrid delivery, risk management and corporate programs.",
+    company: "Al Daleel Raqamee main website",
     quickLinks: "Quick links",
     programs: "Programs",
     contact: "Get in touch",
@@ -490,10 +465,6 @@ const en = {
     title: "Page not found",
     text: "The page you are looking for doesn't exist or has been moved.",
     home: "Back to home",
-  },
-  cv: {
-    title: "Curriculum Vitae",
-    print: "Print / Save as PDF",
   },
 };
 

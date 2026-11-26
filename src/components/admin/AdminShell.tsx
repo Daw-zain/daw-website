@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { getAdminDict, getAdminLang } from "@/lib/admin-i18n";
 import { db } from "@/lib/db";
 import { adminLogout } from "@/app/admin/actions";
-import { LogoPortrait } from "@/components/Logo";
+import { LogoMark } from "@/components/Logo";
 import { AdminNav, LangToggle } from "./AdminNav";
 
 /** Wraps every authenticated admin page: checks role, renders sidebar + header */
@@ -68,10 +68,10 @@ export async function AdminShell({ children, title, role = "EDITOR", actions }: 
       <aside className="border-line bg-navy-900 text-white lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-e">
         <div className="flex items-center justify-between gap-3 px-5 py-5">
           <Link href="/admin" className="flex items-center gap-3">
-            <LogoPortrait className="h-9 w-9" light />
+            <LogoMark className="h-9 w-9" light />
             <span className="leading-tight">
               <span className="block text-sm font-bold" dir="ltr">
-                Daw Zainelabideen
+                Al Daleel Raqamee
               </span>
               <span className="block text-xs text-white/50">Admin</span>
             </span>

@@ -52,10 +52,10 @@ export function escapeHtml(s: string) {
 
 /** Simple branded HTML wrapper for transactional emails */
 export function emailLayout(title: string, bodyHtml: string, rtl = false) {
-  return `<!doctype html><html dir="${rtl ? "rtl" : "ltr"}"><body style="margin:0;background:#F4F6F8;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#102A43">
+  return `<!doctype html><html dir="${rtl ? "rtl" : "ltr"}"><body style="margin:0;background:#F5F8FC;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#0A203C">
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 12px">
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden">
-<tr><td style="background:#102A43;padding:20px 28px;color:#fff;font-size:18px;font-weight:700">Daw Zainelabideen <span style="color:#C5A15A">·</span> <span style="font-weight:400;font-size:14px">Project Management Training &amp; Consulting</span></td></tr>
+<tr><td style="background:#06152A;padding:20px 28px;color:#fff;font-size:18px;font-weight:700">Al Daleel Raqamee <span style="color:#E23337">·</span> <span style="font-weight:400;font-size:14px">${rtl ? "التدريب والاستشارات" : "Training &amp; Consulting"}</span></td></tr>
 <tr><td style="padding:28px"><h1 style="font-size:20px;margin:0 0 16px">${escapeHtml(title)}</h1>${bodyHtml}</td></tr>
 </table></td></tr></table></body></html>`;
 }

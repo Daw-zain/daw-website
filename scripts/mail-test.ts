@@ -29,7 +29,7 @@ async function main() {
     const info = await t.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
       to,
-      subject: "Test email – Daw Zainelabideen website",
+      subject: "Test email – Al Daleel Raqamee Training website",
       text: "This test email confirms that the website can send notifications.\nتؤكد هذه الرسالة أن الموقع قادر على إرسال الإشعارات.",
     });
     console.log(`✔ Test email sent to ${to} (message id ${info.messageId})`);

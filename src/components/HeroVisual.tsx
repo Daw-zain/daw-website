@@ -1,76 +1,73 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 
+type Track = { code: string; label: string; href: string };
+
 /**
- * Hero portrait area. Shows the real portrait uploaded in Admin → Settings (heroImage).
- * Until one is uploaded, an elegant monogram frame is shown — never a stock photo of another person.
+ * Hero panel (no personal photo): Al Daleel Raqamee logo, the PMI® Authorized Training Partner seal
+ * and the certification tracks offered, with animated progress lines.
  */
-export function HeroVisual({ image, alt, labels, badges = [] }: { image?: string; alt: string; labels: { a: string; b: string; c: string }; badges?: (string | null | undefined)[] }) {
+export function HeroVisual({ logo, logoAlt, atpBadge, atpLabel, title, tracks }: { logo: string; logoAlt: string; atpBadge?: string; atpLabel: string; title: string; tracks: Track[] }) {
   return (
-    <div className="relative mx-auto aspect-[4/5] w-full max-w-md">
-      {/* orbit rings */}
+    <div className="relative mx-auto w-full max-w-md">
       <motion.div
         className="absolute -inset-6 rounded-[2.5rem] border border-white/10"
         animate={{ rotate: 360 }}
-        transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
         aria-hidden="true"
       />
-      <div className="absolute -inset-3 rounded-[2.2rem] bg-gradient-to-br from-gold/50 via-brand/40 to-transparent opacity-70 blur-[2px]" aria-hidden="true" />
+      <div className="absolute -inset-3 rounded-[2.2rem] bg-gradient-to-br from-gold/45 via-brand/40 to-transparent opacity-70 blur-[2px]" aria-hidden="true" />
 
-      <div className="fade-up relative h-full overflow-hidden rounded-[2rem] border border-white/15 bg-navy-700 shadow-2xl" style={{ animationDelay: "150ms" }}>
-        {image ? (
-          <Image src={image} alt={alt} fill priority sizes="(min-width:1024px) 420px, 80vw" className="object-cover object-[50%_18%]" />
-        ) : (
-          <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-navy-700 via-navy-600 to-brand-600" role="img" aria-label={alt}>
-            <div className="grid-bg absolute inset-0" />
-            <div className="relative text-center">
-              <div className="mx-auto grid h-36 w-36 place-items-center rounded-full border-2 border-gold/70 bg-navy/40 backdrop-blur" dir="ltr">
-                <span className="text-5xl font-extrabold tracking-tight text-white">
-                  D<span className="text-gold">Z</span>
-                </span>
-              </div>
-              <p className="mt-6 text-lg font-semibold text-white" dir="ltr">
-                Daw Zainelabideen
-              </p>
-              <p className="mt-1 text-sm text-white/60" dir="ltr">PMP® · PMI-RMP® · PMI-ACP®</p>
-            </div>
-          </div>
-        )}
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-navy/80 to-transparent" aria-hidden="true" />
+      <div className="fade-up relative overflow-hidden rounded-[2rem] border border-white/15 bg-navy-700/90 p-7 shadow-2xl backdrop-blur sm:p-8" style={{ animationDelay: "150ms" }}>
+        <div className="grid-bg absolute inset-0 opacity-60" aria-hidden="true" />
+        <div className="relative flex items-center justify-between gap-4">
+          <Image src={logo} alt={logoAlt} width={480} height={337} priority className="h-12 w-auto" />
+          {atpBadge && (
+            <span className="flex items-center gap-2 rounded-full bg-white/95 py-1 pe-3 ps-1 shadow-lg">
+              <Image src={atpBadge} alt={atpLabel} width={40} height={40} className="h-9 w-9 rounded-full object-contain" />
+              <span className="max-w-[9rem] text-[11px] font-bold leading-tight text-navy">{atpLabel}</span>
+            </span>
+          )}
+        </div>
+        <p className="relative mt-7 text-sm font-semibold text-white/70">{title}</p>
+        <ul className="relative mt-4 space-y-3">
+          {tracks.map((tr, i) => (
+            <li key={tr.code}>
+              <Link href={tr.href} className="group block rounded-xl border border-white/10 bg-white/5 p-3.5 transition hover:border-gold/60 hover:bg-white/10">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold text-white" dir="ltr">
+                    {tr.code}
+                  </span>
+                  <span className="truncate text-xs text-white/60">{tr.label}</span>
+                </div>
+                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-brand-400 to-gold"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${92 - i * 14}%` }}
+                    transition={{ delay: 0.5 + i * 0.15, duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
-
-      {/* floating credential badges */}
-      {[
-        { label: labels.a, img: badges[0], cls: "-start-4 top-10 sm:-start-10", delay: 0.5, color: "bg-white text-navy" },
-        { label: labels.b, img: badges[1], cls: "-end-3 top-1/2 sm:-end-8", delay: 0.7, color: "bg-gold text-navy" },
-        { label: labels.c, img: badges[2], cls: "-start-2 bottom-10 sm:-start-6", delay: 0.9, color: "bg-brand text-white" },
-      ].map((b, i) => (
-        <motion.div
-          key={b.label}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: [0, -8, 0] }}
-          transition={{ opacity: { delay: b.delay, duration: 0.5 }, y: { delay: b.delay, duration: 6 + i, repeat: Infinity, ease: "easeInOut" } }}
-          className={b.img ? `absolute ${b.cls} h-20 w-20 overflow-hidden rounded-full bg-white p-0.5 shadow-xl ring-4 ring-white/20 sm:h-24 sm:w-24` : `absolute ${b.cls} rounded-xl px-4 py-2.5 text-sm font-bold shadow-xl ${b.color}`}
-          dir="ltr"
-        >
-          {b.img ? <Image src={b.img} alt={b.label} width={96} height={96} className="h-full w-full rounded-full object-cover" /> : b.label}
-        </motion.div>
-      ))}
     </div>
   );
 }
-
 /** Animated background: a subtle project timeline / Gantt drifting behind the hero copy */
 export function HeroBackdrop() {
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1200 700" aria-hidden="true">
       <defs>
         <linearGradient id="hb-line" x1="0" x2="1">
-          <stop offset="0" stopColor="#3B8BD0" stopOpacity="0" />
-          <stop offset=".5" stopColor="#3B8BD0" stopOpacity=".55" />
-          <stop offset="1" stopColor="#C5A15A" stopOpacity=".8" />
+          <stop offset="0" stopColor="#5A62C4" stopOpacity="0" />
+          <stop offset=".5" stopColor="#5A62C4" stopOpacity=".55" />
+          <stop offset="1" stopColor="#E23337" stopOpacity=".8" />
         </linearGradient>
       </defs>
       {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -80,7 +77,7 @@ export function HeroBackdrop() {
           y={140 + i * 70}
           height="10"
           rx="5"
-          fill={i === 5 ? "#C5A15A" : "#D9EAF7"}
+          fill={i === 5 ? "#E23337" : "#E3E5F5"}
           fillOpacity={i === 5 ? 0.35 : 0.08}
           initial={{ width: 0 }}
           animate={{ width: 220 + (i % 3) * 60 }}

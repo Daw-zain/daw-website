@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Dictionary } from "@/dictionaries/en";
 import type { Locale } from "@/lib/constants";
 import type { Settings } from "@/lib/settings";
+import { BRAND } from "@/lib/brand";
 import { Logo } from "./Logo";
 import { NewsletterForm } from "./forms/NewsletterForm";
 import { FacebookIcon, LinkedInIcon, MailIcon, PhoneIcon, PinIcon, WhatsAppIcon, YouTubeIcon } from "./Icons";
@@ -18,7 +19,6 @@ export function Footer({ locale, t, settings, programs }: { locale: Locale; t: D
     { href: L("/corporate"), label: t.nav.corporate },
     { href: L("/knowledge"), label: t.nav.knowledge },
     { href: L("/calendar"), label: t.nav.calendar },
-    { href: L("/credentials"), label: t.nav.credentials },
     { href: L("/contact"), label: t.nav.contact },
   ];
   const socials = [
@@ -98,6 +98,11 @@ export function Footer({ locale, t, settings, programs }: { locale: Locale; t: D
                 </li>
               )}
               <li>
+                <a href={BRAND.companyUrl} target="_blank" rel="noopener" className="hover:text-gold">
+                  {t.footer.company} ↗
+                </a>
+              </li>
+              <li>
                 <Link href={L("/contact")} className="font-semibold text-gold hover:underline">
                   {t.cta.contact} →
                 </Link>
@@ -111,7 +116,7 @@ export function Footer({ locale, t, settings, programs }: { locale: Locale; t: D
         </div>
         <div className="flex flex-col gap-4 py-8 text-sm text-white/55 md:flex-row md:items-start md:justify-between">
           <p>
-            © {new Date().getFullYear()} Daw Zainelabideen. {t.footer.rights} ·{" "}
+            © {new Date().getFullYear()} {locale === "ar" ? BRAND.legalAr : BRAND.legalEn}. {t.footer.rights} ·{" "}
             <Link href={L("/privacy")} className="hover:text-gold">
               {t.footer.privacy}
             </Link>

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { isLocale, type Locale } from "@/lib/constants";
 import { getDictionary } from "@/lib/i18n";
 import { getUpcomingSessions, seatsLeft } from "@/lib/queries";
-import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMeta, providerRef } from "@/lib/seo";
 import { pick } from "@/lib/utils";
 import { PageHero, JsonLd, EmptyState } from "@/components/ui";
 import { CalendarView, type CalSession } from "@/components/CalendarView";
@@ -59,7 +59,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ local
               s.mode === "ONLINE" ? "https://schema.org/OnlineEventAttendanceMode" : s.mode === "HYBRID" ? "https://schema.org/MixedEventAttendanceMode" : "https://schema.org/OfflineEventAttendanceMode",
             eventStatus: "https://schema.org/EventScheduled",
             location: s.mode === "ONLINE" ? { "@type": "VirtualLocation", url: L(`/programs/${s.program.slug}`) } : { "@type": "Place", name: pick(s, "location", locale) || "Libya" },
-            organizer: { "@type": "Person", name: "Daw Zainelabideen" },
+            organizer: providerRef(locale),
           })),
         ]}
       />

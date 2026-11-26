@@ -8,7 +8,7 @@ import { getResource, getResources } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { renderMarkdown } from "@/lib/markdown";
-import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMeta, providerRef } from "@/lib/seo";
 import { formatDate, pick, siteUrl, youtubeEmbed } from "@/lib/utils";
 import { JsonLd, ShareButtons, PageHero } from "@/components/ui";
 import { ResourceCard } from "@/components/cards";
@@ -78,7 +78,7 @@ export default async function ResourcePage({ params }: Props) {
             inLanguage: locale,
             datePublished: r.publishedAt.toISOString(),
             dateModified: r.updatedAt.toISOString(),
-            author: { "@type": "Person", name: "Daw Zainelabideen" },
+            author: providerRef(locale),
             url,
             ...(r.coverImage ? { image: siteUrl(r.coverImage) } : {}),
             ...(r.type === "VIDEO" && r.videoUrl ? { contentUrl: r.videoUrl, uploadDate: r.publishedAt.toISOString(), thumbnailUrl: r.coverImage ? siteUrl(r.coverImage) : undefined } : {}),

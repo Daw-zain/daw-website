@@ -25,7 +25,6 @@ export default async function Forgot({ params }: { params: Promise<{ locale: str
       mode="forgot"
       title={t.account.forgotTitle}
       text={t.account.forgotText}
-      partnerLogo={settings.partnerLogo || undefined}
       footer={
         <Link href={`/${locale}/account/login`} className="font-semibold text-brand hover:underline">
           {t.account.backToLogin}

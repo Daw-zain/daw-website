@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -13,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string };
 
-export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean; partnerLogo?: string }) {
+export function Header({ locale, t, signedIn }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean }) {
   const pathname = usePathname() || `/${locale}`;
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -44,7 +43,7 @@ export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t
     { href: L("/calendar"), label: t.nav.calendar },
     { href: L("/contact"), label: t.nav.contact },
   ];
-  const secondary: NavItem[] = [{ href: L("/credentials"), label: t.nav.credentials }];
+  const secondary: NavItem[] = [];
 
   const isActive = (h: string) => (h === L("") ? pathname === h : pathname === h || pathname.startsWith(h + "/"));
 
@@ -56,7 +55,7 @@ export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t
     <header
       className={cn(
         "no-print sticky top-0 z-50 transition-all duration-300",
-        scrolled ? "bg-white/90 shadow-[0_1px_0_rgb(16_42_67/0.08),0_10px_30px_-18px_rgb(16_42_67/0.35)] backdrop-blur-lg" : "bg-white/70 backdrop-blur",
+        scrolled ? "bg-navy-900/95 shadow-[0_10px_30px_-18px_rgb(0_0_0/0.6)] backdrop-blur-lg" : "bg-navy-900/90 backdrop-blur",
       )}
     >
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:start-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-navy focus:px-4 focus:py-2 focus:text-white">
@@ -65,22 +64,8 @@ export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t
       <div className={cn("container-x flex items-center justify-between gap-2 transition-all max-[380px]:px-3 sm:gap-4", scrolled ? "h-16" : "h-20")}>
         <div className="flex min-w-0 shrink items-center gap-3 lg:gap-4">
           <Link href={L("")} aria-label={t.meta.siteName} className="min-w-0 shrink">
-            <Logo locale={locale} />
+            <Logo locale={locale} light />
           </Link>
-          {partnerLogo && (
-            <>
-              <span className="hidden h-9 w-px shrink-0 bg-line sm:block" aria-hidden="true" />
-              <Image
-                src={partnerLogo}
-                alt={locale === "ar" ? "الدليل الرقمي لتقنية المعلومات والنظم الجغرافية" : "Aldaleel Raqamee for IT & GIS"}
-                title={locale === "ar" ? "الدليل الرقمي لتقنية المعلومات والنظم الجغرافية" : "Aldaleel Raqamee for IT & GIS"}
-                width={57}
-                height={40}
-                priority
-                className="hidden h-9 w-auto shrink-0 transition-transform duration-300 hover:scale-110 sm:block"
-              />
-            </>
-          )}
         </div>
 
         <nav aria-label="Main" className="hidden xl:block">
@@ -96,7 +81,7 @@ export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <Link href={L("/search")} className="hidden rounded-lg p-2.5 text-navy/70 transition hover:bg-mist hover:text-navy sm:inline-flex" aria-label={t.nav.search}>
+          <Link href={L("/search")} className="hidden rounded-lg p-2.5 text-white/75 transition hover:bg-white/10 hover:text-white sm:inline-flex" aria-label={t.nav.search}>
             <SearchIcon className="h-5 w-5" />
           </Link>
           <Link
@@ -104,17 +89,17 @@ export function Header({ locale, t, signedIn, partnerLogo }: { locale: Locale; t
             hrefLang={other}
             lang={other}
             aria-label={t.nav.switchLabel}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-2 text-sm font-semibold text-navy transition hover:border-brand hover:text-brand sm:px-3"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-2.5 py-2 text-sm font-semibold text-white transition hover:border-white/50 sm:px-3"
           >
             <GlobeIcon className="h-4 w-4 max-[380px]:hidden" />
             <span>{other.toUpperCase()}</span>
           </Link>
-          <Link href={L("/register")} className="btn btn-primary btn-sm hidden sm:inline-flex">
+          <Link href={L("/register")} className="btn btn-gold btn-sm hidden sm:inline-flex">
             {t.nav.enroll}
           </Link>
           <button
             type="button"
-            className="inline-flex rounded-lg p-2.5 text-navy transition hover:bg-mist xl:hidden"
+            className="inline-flex rounded-lg p-2.5 text-white transition hover:bg-white/10 xl:hidden"
             aria-expanded={open}
             aria-controls="mobile-menu"
             aria-label={t.nav.menu}

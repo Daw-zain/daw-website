@@ -16,8 +16,8 @@ writeFileSync(path.join(out, ".nojekyll"), "");
 writeFileSync(
   path.join(out, "index.html"),
   `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Daw Zainelabideen</title><link rel="canonical" href="${base}/ar/">
+<title>الدليل الرقمي – التدريب والاستشارات</title><link rel="canonical" href="${base}/ar/">
 <script>var l=localStorage.getItem("dz_locale");location.replace("${base}/"+(l==="en"?"en":"ar")+"/"+location.search+location.hash);</script>
-<meta http-equiv="refresh" content="0;url=${base}/ar/"></head><body><a href="${base}/ar/">ضو زين العابدين</a></body></html>`,
+<meta http-equiv="refresh" content="0;url=${base}/ar/"></head><body><a href="${base}/ar/">الدليل الرقمي – التدريب والاستشارات</a></body></html>`,
 );
 console.log("✔ out/ ready for GitHub Pages");

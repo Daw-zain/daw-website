@@ -54,7 +54,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const maxP = Math.max(1, ...byProg.map((b) => b.count));
 
   const checklist = [
-    !settings.heroImage && a.setupItems.heroImage,
     !settings.contactEmail && a.setupItems.contactEmail,
     !settings.phone && a.setupItems.phone,
     !settings.whatsapp && a.setupItems.whatsapp,
@@ -63,7 +62,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     upcoming === 0 && a.setupItems.sessions,
     noDuration > 0 && `${a.setupItems.durations} (${noDuration})`,
     testimonials === 0 && a.setupItems.testimonials,
-    !settings.cvUrl && a.setupItems.cvUrl,
   ].filter(Boolean) as string[];
 
   const cards = [

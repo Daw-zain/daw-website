@@ -1,4 +1,4 @@
-import { IBM_Plex_Sans_Arabic, Inter } from "next/font/google";
+import { Alexandria, IBM_Plex_Sans_Arabic, Inter } from "next/font/google";
 
 export const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 export const plexArabic = IBM_Plex_Sans_Arabic({
@@ -7,3 +7,5 @@ export const plexArabic = IBM_Plex_Sans_Arabic({
   variable: "--font-plex-arabic",
   display: "swap",
 });
+/** Headings — same display font as www.aldaleel.ly */
+export const alexandria = Alexandria({ subsets: ["arabic", "latin"], variable: "--font-alexandria", display: "swap" });

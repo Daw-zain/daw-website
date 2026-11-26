@@ -1,3 +1,4 @@
+import { BRAND } from "./brand";
 import type { Metadata } from "next";
 import type { Locale } from "./constants";
 import { getDictionary } from "./i18n";
@@ -56,43 +57,39 @@ export function pageMeta({
   };
 }
 
-export function personJsonLd(locale: Locale, opts: { image?: string; sameAs: string[] }) {
+/** The company (parent organization) — details live on www.aldaleel.ly. */
+export function organizationJsonLd(locale: Locale, opts: { sameAs: string[] }) {
   return {
     "@context": "https://schema.org",
-    "@type": "Person",
-    "@id": siteUrl("/#person"),
-    name: "Daw Zainelabideen",
-    alternateName: "ضو زين العابدين",
-    jobTitle: locale === "ar" ? "مدرب ومستشار إدارة المشروعات" : "Project Management Trainer & Consultant",
-    url: siteUrl(`/${locale}`),
-    ...(opts.image ? { image: siteUrl(opts.image) } : {}),
-    sameAs: opts.sameAs,
-    alumniOf: [{ "@type": "CollegeOrUniversity", name: "University of Birmingham" }],
-    hasCredential: [
-      { "@type": "EducationalOccupationalCredential", credentialCategory: "Professional certification", name: "Project Management Professional (PMP)", recognizedBy: { "@type": "Organization", name: "Project Management Institute" } },
-      { "@type": "EducationalOccupationalCredential", credentialCategory: "Professional certification", name: "PMI Risk Management Professional (PMI-RMP)", recognizedBy: { "@type": "Organization", name: "Project Management Institute" } },
-      { "@type": "EducationalOccupationalCredential", credentialCategory: "Professional certification", name: "PMI Agile Certified Practitioner (PMI-ACP)", recognizedBy: { "@type": "Organization", name: "Project Management Institute" } },
-      { "@type": "EducationalOccupationalCredential", credentialCategory: "degree", name: "Master's Degree in Engineering Project Management" },
-      { "@type": "EducationalOccupationalCredential", credentialCategory: "degree", name: "BEng in Computer Engineering", recognizedBy: { "@type": "CollegeOrUniversity", name: "University of Birmingham" } },
-    ],
-    knowsAbout: ["Project Management", "Risk Management", "Agile", "PMO", "Project Governance", "PMP Exam Preparation"],
+    "@type": "Organization",
+    "@id": `${BRAND.companyUrl}/#organization`,
+    name: locale === "ar" ? BRAND.legalAr : BRAND.legalEn,
+    alternateName: [BRAND.nameAr, BRAND.nameEn, "AL DALEEL"],
+    url: BRAND.companyUrl,
+    logo: siteUrl(BRAND.logo),
+    ...(opts.sameAs.length ? { sameAs: opts.sameAs } : {}),
   };
 }
 
+/** This site: the company's training & consulting service. */
 export function serviceProviderJsonLd(locale: Locale, opts: { email?: string; phone?: string }) {
   return {
     "@context": "https://schema.org",
-    "@type": "ProfessionalService",
-    "@id": siteUrl("/#business"),
-    name: locale === "ar" ? "ضو زين العابدين – التدريب والاستشارات في إدارة المشروعات" : "Daw Zainelabideen – Project Management Training & Consulting",
+    "@type": "EducationalOrganization",
+    "@id": siteUrl("/#training"),
+    name: locale === "ar" ? BRAND.siteAr : BRAND.siteEn,
     url: siteUrl(`/${locale}`),
-    founder: { "@id": siteUrl("/#person") },
-    areaServed: [{ "@type": "Country", name: "Libya" }, { "@type": "Place", name: "Middle East and North Africa" }],
+    logo: siteUrl(BRAND.logo),
+    parentOrganization: { "@id": `${BRAND.companyUrl}/#organization` },
+    areaServed: [{ "@type": "Country", name: "Libya" }],
+    knowsAbout: ["Project Management", "Risk Management", "Agile", "PMO", "Project Governance", "PMP Exam Preparation"],
     ...(opts.email ? { email: opts.email } : {}),
     ...(opts.phone ? { telephone: opts.phone } : {}),
   };
 }
 
+/** schema.org reference to this training organization (for Course / Event / Article "provider") */
+export const providerRef = (locale: Locale) => ({ "@type": "Organization", name: locale === "ar" ? BRAND.siteAr : BRAND.siteEn, url: siteUrl(`/${locale}`) });
 export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
   return {
     "@context": "https://schema.org",

@@ -28,7 +28,6 @@ export default async function Login({ params }: { params: Promise<{ locale: stri
       mode="login"
       title={t.account.loginTitle}
       text={t.account.loginText}
-      partnerLogo={settings.partnerLogo || undefined}
       footer={
         <>
           {t.account.noAccount}{" "}

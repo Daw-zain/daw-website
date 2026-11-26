@@ -25,7 +25,6 @@ export default async function Reset({ params }: { params: Promise<{ locale: stri
       mode="reset"
       title={t.account.resetTitle}
       text={t.account.resetText}
-      partnerLogo={settings.partnerLogo || undefined}
       footer={
         <Link href={`/${locale}/account/login`} className="font-semibold text-brand hover:underline">
           {t.account.backToLogin}

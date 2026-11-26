@@ -7,7 +7,7 @@ import { getDictionary } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 import { getProgram, getPrograms, seatsLeft } from "@/lib/queries";
 import { registrationOptions } from "@/lib/program-options";
-import { breadcrumbJsonLd, pageMeta } from "@/lib/seo";
+import { breadcrumbJsonLd, pageMeta, providerRef } from "@/lib/seo";
 import { formatDate, lines, pick, siteUrl } from "@/lib/utils";
 import { PageHero, JsonLd, ShareButtons, StatusChip, WhatsAppInquiry, EmptyState } from "@/components/ui";
 import { Reveal } from "@/components/motion";
@@ -76,7 +76,7 @@ export default async function ProgramPage({ params }: Props) {
     description: pick(p, "summary", locale),
     url,
     inLanguage: locale,
-    provider: { "@type": "Person", name: "Daw Zainelabideen", url: siteUrl(L("")) },
+    provider: providerRef(locale),
     ...(p.sessions.length
       ? {
           hasCourseInstance: p.sessions.map((s) => ({

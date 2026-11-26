@@ -28,7 +28,6 @@ export default async function Register({ params }: { params: Promise<{ locale: s
       mode="register"
       title={t.account.registerTitle}
       text={t.account.registerText}
-      partnerLogo={settings.partnerLogo || undefined}
       footer={
         <>
           {t.account.haveAccount}{" "}
