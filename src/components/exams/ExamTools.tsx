@@ -7,8 +7,10 @@ import type { ExamLabels } from "./ExamShell";
 
 /* ───────────── floating panel (draggable on desktop, bottom sheet on phones) ───────────── */
 
-export function FloatingPanel({ title, onClose, children, width = 320, start, closeLabel }: { title: string; onClose: () => void; children: ReactNode; width?: number; start: { x: number; y: number }; closeLabel: string }) {
-  const [pos, setPos] = useState(start);
+export function FloatingPanel({ title, onClose, children, width: wanted = 320, start, closeLabel }: { title: string; onClose: () => void; children: ReactNode; width?: number; start: { x: number; y: number }; closeLabel: string }) {
+  // never wider than the window, and opened fully inside it
+  const width = typeof window === "undefined" ? wanted : Math.min(wanted, window.innerWidth - 16);
+  const [pos, setPos] = useState(() => (typeof window === "undefined" ? start : { x: Math.max(8, Math.min(start.x, window.innerWidth - width - 8)), y: start.y }));
   const [small, setSmall] = useState(false);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   useEffect(() => {
