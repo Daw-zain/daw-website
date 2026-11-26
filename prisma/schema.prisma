@@ -1,13 +1,15 @@
 // Al Daleel Raqamee – Training & Consulting – data model
-// Development uses SQLite. For production run `npm run db:use-postgres` to switch the provider.
-// Enum-like fields are stored as strings (see src/lib/constants.ts) so the schema is portable.
+// Database: PostgreSQL on Supabase (local dev and the live site share it — see docs/exam-system).
+// Enum-like fields are stored as strings (see src/lib/constants.ts).
+// Exam-system tables use database-side defaults (dbgenerated / now()) because rows are also
+// created by PostgreSQL functions and triggers (supabase/exams.sql), not only by Prisma.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -85,6 +87,10 @@ model Program {
   updatedAt       DateTime  @updatedAt
   sessions        CourseSession[]
   registrations   Registration[]
+  // Exam system (docs/exam-system): folders are created automatically by a database trigger
+  examFolders     ExamFolder[]
+  instructors     CourseInstructor[]
+  enrollments     Enrollment[]
 }
 
 model CourseSession {
@@ -354,4 +360,96 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([createdAt])
+}
+
+// ───────────── Exam system · Phase 1: members, course roles, enrollment, folders ─────────────
+// Online identity = Supabase Auth (auth.users). ExamMember maps an auth user to a role.
+// Browser roles (anon / authenticated) have NO direct access to these tables: everything goes
+// through SECURITY DEFINER functions in supabase/exams.sql that check the caller's session.
+
+model ExamMember {
+  id          String             @id @default(dbgenerated("gen_random_uuid()::text"))
+  authUserId  String             @unique // auth.users.id
+  email       String             @unique
+  name        String             @default("")
+  role        String             @default("LEARNER") // ADMIN | INSTRUCTOR | LEARNER
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now()) @updatedAt
+  instructing CourseInstructor[]
+  enrollments Enrollment[]
+}
+
+model CourseInstructor {
+  id                    String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId             String
+  program               Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  memberId              String
+  member                ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  // Flexible permissions set by the admin (section 17.5)
+  canEditQuestions      Boolean    @default(true)
+  canDeleteQuestions    Boolean    @default(false)
+  canManageCategories   Boolean    @default(true)
+  canManageScenarios    Boolean    @default(true)
+  canImport             Boolean    @default(true)
+  canExport             Boolean    @default(false)
+  canCreateExams        Boolean    @default(true)
+  canPublishExams       Boolean    @default(false) // false = needs admin approval
+  canManageDomainTests  Boolean    @default(true)
+  canManageSimulations  Boolean    @default(true)
+  canViewResults        Boolean    @default(true)
+  canReviewEssays       Boolean    @default(true)
+  canReopenAttempts     Boolean    @default(false)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @default(now()) @updatedAt
+
+  @@unique([programId, memberId])
+}
+
+model Enrollment {
+  id             String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId      String
+  program        Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  memberId       String
+  member         ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status         String     @default("ACTIVE") // ACTIVE | SUSPENDED | COMPLETED
+  registrationId String?    // the Registration request it came from, if any
+  createdById    String?    // ExamMember.id of the admin/instructor who enrolled
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @default(now()) @updatedAt
+
+  @@unique([programId, memberId])
+}
+
+model ExamFolder {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId   String
+  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  kind        String // QUESTION_BANK | DOMAIN_TESTS | EXAM_SIMULATIONS | MISTAKES_QUIZ | RESULTS | CUSTOM
+  system      Boolean  @default(false) // the 5 built-in folders; one per kind per course (unique index in SQL)
+  nameAr      String
+  nameEn      String
+  descAr      String   @default("")
+  descEn      String   @default("")
+  status      String   @default("ACTIVE") // ACTIVE | HIDDEN | ARCHIVED
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([programId])
+}
+
+model ExamAuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  actorId   String? // ExamMember.id
+  action    String
+  entity    String?
+  entityId  String?
+  programId String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([programId])
 }

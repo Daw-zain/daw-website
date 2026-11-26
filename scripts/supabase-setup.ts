@@ -54,10 +54,14 @@ function statements(sql: string) {
 async function main() {
   const { PrismaClient } = await import("@prisma/client");
   const db = new PrismaClient();
-  const sql = readFileSync(path.join(process.cwd(), "supabase/setup.sql"), "utf8");
-  for (const s of statements(sql)) await db.$executeRawUnsafe(s);
+  // setup.sql first (locks everything), then the exam system (adds its own functions and grants)
+  for (const file of ["supabase/setup.sql", "supabase/exams.sql"]) {
+    const sql = readFileSync(path.join(process.cwd(), file), "utf8");
+    for (const s of statements(sql)) await db.$executeRawUnsafe(s);
+    console.log(`✔ Applied ${file}`);
+  }
   await db.$disconnect();
-  console.log("✔ Security rules applied (visitors can only submit forms)");
+  console.log("✔ Security rules applied (visitors can only submit forms; exam data only through checked functions)");
   console.log("\nDone. Next: add the GitHub secrets and run the Pages workflow — see docs/GITHUB-PAGES.md");
 }
 
