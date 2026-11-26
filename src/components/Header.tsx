@@ -9,13 +9,29 @@ import type { Locale } from "@/lib/constants";
 import { Logo } from "./Logo";
 import { CloseIcon, GlobeIcon, MenuIcon, SearchIcon } from "./Icons";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/static/supabase";
 
 type NavItem = { href: string; label: string };
 
-export function Header({ locale, t, signedIn }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean }) {
+export function Header({ locale, t, signedIn: serverSignedIn }: { locale: Locale; t: Pick<Dictionary, "nav" | "meta">; signedIn: boolean }) {
   const pathname = usePathname() || `/${locale}`;
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  // the static (GitHub Pages) build has no server session: ask the browser's Supabase session instead
+  const [browserSignedIn, setBrowserSignedIn] = useState(false);
+  const signedIn = serverSignedIn || browserSignedIn;
+  useEffect(() => {
+    if (serverSignedIn) return;
+    let sub: { unsubscribe: () => void } | undefined;
+    try {
+      const sb = supabase();
+      sb.auth.getSession().then(({ data }) => setBrowserSignedIn(!!data.session));
+      sub = sb.auth.onAuthStateChange((_e, s) => setBrowserSignedIn(!!s)).data.subscription;
+    } catch {
+      /* Supabase not configured (local server build) — the server value is used */
+    }
+    return () => sub?.unsubscribe();
+  }, [serverSignedIn]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
