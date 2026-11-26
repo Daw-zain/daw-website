@@ -80,13 +80,11 @@ as $$
 declare
   c jsonb := coalesce(p_content, '{}'::jsonb);
   a jsonb := coalesce(p_answer, '{}'::jsonb);
-  s jsonb := coalesce(p_scoring, '{}'::jsonb);
-  opts jsonb; lft jsonb; rgt jsonb; ids text[]; rids text[]; sel text[]; v_mode text; k text; v text; used text[] := '{}';
+  opts jsonb; lft jsonb; rgt jsonb; ids text[]; rids text[]; sel text[]; k text; v text; used text[] := '{}';
   v_num numeric; v_tol numeric; v_acc jsonb; v_min int; v_max int;
   v_r jsonb; v_i bigint; v_tar text; v_ten text;
 begin
-  v_mode := coalesce(nullif(s ->> 'mode', ''), 'ALL_OR_NOTHING');
-
+  -- every question is "full mark or zero" (essays are graded by a person); p_scoring is accepted and ignored
   case p_type
   when 'MCQ', 'MULTI' then
     opts := public.exam_bank_list(c -> 'options', 2, 'options');
@@ -97,11 +95,10 @@ begin
     if not sel <@ ids then raise exception 'invalid_question: correct_unknown_option'; end if;
     if p_type = 'MCQ' and cardinality(sel) <> 1 then raise exception 'invalid_question: mcq_one_correct'; end if;
     if p_type = 'MULTI' and cardinality(sel) = cardinality(ids) then raise exception 'invalid_question: multi_not_all_correct'; end if;
-    if p_type = 'MULTI' and v_mode not in ('ALL_OR_NOTHING', 'PARTIAL', 'PARTIAL_PENALTY') then raise exception 'invalid_question: scoring_mode'; end if;
     return jsonb_build_object(
       'content', jsonb_build_object('options', opts),
       'answer', jsonb_build_object('correct', to_jsonb(sel)),
-      'scoring', case when p_type = 'MULTI' then jsonb_build_object('mode', v_mode) else jsonb_build_object('mode', 'ALL_OR_NOTHING') end);
+      'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   when 'TRUE_FALSE' then
     if coalesce(jsonb_typeof(a -> 'value'), '') <> 'boolean' then raise exception 'invalid_question: tf_value_missing'; end if;
@@ -145,8 +142,7 @@ begin
     if sel is null or cardinality(sel) <> cardinality(ids) or not (sel @> ids and ids @> sel) then
       raise exception 'invalid_question: order_not_permutation';
     end if;
-    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL') then raise exception 'invalid_question: scoring_mode'; end if;
-    return jsonb_build_object('content', jsonb_build_object('items', opts), 'answer', jsonb_build_object('order', to_jsonb(sel)), 'scoring', jsonb_build_object('mode', v_mode));
+    return jsonb_build_object('content', jsonb_build_object('items', opts), 'answer', jsonb_build_object('order', to_jsonb(sel)), 'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   when 'MATCHING' then
     lft := public.exam_bank_list(c -> 'left', 2, 'left');
@@ -161,11 +157,10 @@ begin
       if v = any(used) then raise exception 'invalid_question: pairs_duplicate_right'; end if;
       used := used || v;
     end loop;
-    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL') then raise exception 'invalid_question: scoring_mode'; end if;
     return jsonb_build_object(
       'content', jsonb_build_object('left', lft, 'right', rgt),
       'answer', jsonb_build_object('pairs', (select jsonb_object_agg(x, a -> 'pairs' ->> x) from unnest(ids) x)),
-      'scoring', jsonb_build_object('mode', v_mode));
+      'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   -- ── phase 10: advanced types ──
   when 'HOTSPOT' then
@@ -187,8 +182,7 @@ begin
       v_acc := v_acc || jsonb_build_array(jsonb_build_object('id', k,
         'x', round((v_r ->> 'x')::numeric, 2), 'y', round((v_r ->> 'y')::numeric, 2), 'w', round((v_r ->> 'w')::numeric, 2), 'h', round((v_r ->> 'h')::numeric, 2)));
     end loop;
-    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL', 'PARTIAL_PENALTY') then raise exception 'invalid_question: scoring_mode'; end if;
-    return jsonb_build_object('content', '{}'::jsonb, 'answer', jsonb_build_object('regions', v_acc), 'scoring', jsonb_build_object('mode', v_mode));
+    return jsonb_build_object('content', '{}'::jsonb, 'answer', jsonb_build_object('regions', v_acc), 'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   when 'DRAGDROP' then
     -- items are dropped into zones; a zone may take several items; items with no zone are distractors
@@ -203,11 +197,10 @@ begin
       if v is null or not v = any(rids) then raise exception 'invalid_question: placements_unknown_zone'; end if;
     end loop;
     if not exists (select 1 from jsonb_object_keys(a -> 'placements')) then raise exception 'invalid_question: placements_missing'; end if;
-    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL', 'PARTIAL_PENALTY') then raise exception 'invalid_question: scoring_mode'; end if;
     return jsonb_build_object(
       'content', jsonb_build_object('items', opts, 'zones', rgt),
       'answer', jsonb_build_object('placements', a -> 'placements'),
-      'scoring', jsonb_build_object('mode', v_mode));
+      'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   when 'CLOZE' then
     -- a passage with [[id]] markers; each marker is a drop-down (SELECT) or a typed answer (TEXT)
@@ -247,11 +240,10 @@ begin
     if exists (select 1 from regexp_matches(v_tar || ' ' || v_ten, '\[\[([^\]]*)\]\]', 'g') m where not m[1] = any(ids)) then
       raise exception 'invalid_question: cloze_marker_unknown';
     end if;
-    if v_mode not in ('ALL_OR_NOTHING', 'PARTIAL') then raise exception 'invalid_question: scoring_mode'; end if;
     return jsonb_build_object(
       'content', jsonb_build_object('textAr', v_tar, 'textEn', v_ten, 'blanks', v_acc),
       'answer', jsonb_build_object('blanks', lft),
-      'scoring', jsonb_build_object('mode', v_mode));
+      'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
 
   else
     raise exception 'invalid_question: unknown_type';
@@ -328,7 +320,7 @@ as $$
     'keywords', to_jsonb(q."keywords"), 'reference', q."reference", 'version', q."version",
     'scenarioId', q."scenarioId", 'scenarioOrder', q."scenarioOrder",
     'createdAt', q."createdAt", 'updatedAt', q."updatedAt",
-    'answer', s."answer", 'scoring', s."scoring",
+    'answer', s."answer", 'scoring', jsonb_build_object('mode', case when q."type" = 'ESSAY' then 'MANUAL' else 'ALL_OR_NOTHING' end),
     'feedbackAr', s."feedbackAr", 'feedbackEn', s."feedbackEn",
     'explanationAr', s."explanationAr", 'explanationEn', s."explanationEn",
     'optionRationale', s."optionRationale")
@@ -578,7 +570,7 @@ begin
   -- exists, and the areas are drawn on it). It cannot go ACTIVE like that (checked below and in set_status).
   if v_type = 'HOTSPOT' and v_status <> 'ACTIVE' and coalesce(jsonb_array_length(case when jsonb_typeof(p_q -> 'answer' -> 'regions') = 'array' then p_q -> 'answer' -> 'regions' end), 0) = 0 then
     norm := jsonb_build_object('content', '{}'::jsonb, 'answer', jsonb_build_object('regions', '[]'::jsonb),
-      'scoring', jsonb_build_object('mode', case when p_q -> 'scoring' ->> 'mode' in ('PARTIAL', 'PARTIAL_PENALTY') then p_q -> 'scoring' ->> 'mode' else 'ALL_OR_NOTHING' end));
+      'scoring', jsonb_build_object('mode', 'ALL_OR_NOTHING'));
   else
     norm := public.exam_bank_validate(v_type, p_q -> 'content', p_q -> 'answer', p_q -> 'scoring');
   end if;

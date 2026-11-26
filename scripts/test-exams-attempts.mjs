@@ -127,7 +127,7 @@ try {
     ok("Incomplete ordering → rejected", /invalid_response/.test(r.error), r.error);
     const answers = [
       ["س1", { choice: "o2" }], // correct 1
-      ["س2", { choices: ["o1"] }], // partial 1 of 2 → 2 × 1/2 = 1
+      ["س2", { choices: ["o1"] }], // only 1 of the 2 right choices → 0 (full mark or zero, even if saved as partial)
       ["س3", { value: false }], // correct 1
       ["س4", { value: 10.4 }], // within tolerance 1
       ["س5", { text: "  work   breakdown structure " }], // case/space-insensitive 1
@@ -150,7 +150,7 @@ try {
     const res = r.value;
     ok("Submit: graded on the server; essay pending → SUBMITTED, pass/fail not decided yet", res?.status === "SUBMITTED" && res.needsManual === true && res.passed === null, JSON.stringify({ s: res?.status, p: res?.passed }));
     // max = 1 + 2 + 1 + 1 + 1 + 4 (essay) + 1 + 1 + 1 + 1 = 14
-    ok("Score = 1+1+1+1+1+0+1+0 (essay pending) = 7 of 14", Number(res?.score) === 7 && Number(res?.maxScore) === 14, `${res?.score}/${res?.maxScore}`);
+    ok("Score = 1+0+1+1+1+0+1+1+0 (essay pending) = 6 of 14", Number(res?.score) === 6 && Number(res?.maxScore) === 14, `${res?.score}/${res?.maxScore}`);
     ok("Review shows correct answers, feedback and explanation after submitting", res?.reviewVisible === true && res.questions.some((q) => q.explanationAr === SECRET_EXPL && q.feedbackAr === SECRET_FB && q.answer), "");
     r = await j("exam_attempt_save", A1, byStem("س1").id, { choice: "o1" }, false);
     ok("Saving after submission → refused", /attempt_closed/.test(r.error), r.error);
@@ -169,7 +169,7 @@ try {
     r = await j("exam_attempt_grade", essayId, 5.0, "");
     ok("Essay score above its points → refused", /invalid_grade: score/.test(r.error), r.error);
     r = await j("exam_attempt_grade", essayId, 3.0, "جيد");
-    ok("Grade the essay 3/4 → completed, 10/14 = 71.43% ≥ 60% → passed", r.value?.status === "COMPLETED" && Number(r.value.score) === 10 && Number(r.value.percent) === 71.43 && r.value.passed === true, JSON.stringify({ s: r.value?.status, sc: r.value?.score, p: r.value?.percent }));
+    ok("Grade the essay 3/4 → completed, 9/14 = 64.29% ≥ 60% → passed", r.value?.status === "COMPLETED" && Number(r.value.score) === 9 && Number(r.value.percent) === 64.29 && r.value.passed === true, JSON.stringify({ s: r.value?.status, sc: r.value?.score, p: r.value?.percent }));
 
     // ── timer: the server closes the attempt ──
     await as(users.l1);
@@ -211,13 +211,14 @@ try {
     let y = await g(multi("PARTIAL"), { choices: ["a", "b", "c", "d"] });
     let z = await g(multi("PARTIAL_PENALTY"), { choices: ["a", "b"] });
     let w = await g(multi("ALL_OR_NOTHING"), { choices: ["a"] });
-    ok("Multiple responses: partial 1/2 → 1; choosing all 4 → 1 (not full); penalty 1 right + 1 wrong → 0; all-or-nothing → 0", Number(x.score) === 1 && Number(y.score) === 1 && Number(z.score) === 0 && Number(w.score) === 0, JSON.stringify([x.score, y.score, z.score, w.score]));
+    const full = await g(multi("PARTIAL"), { choices: ["c", "a"] });
+    ok("Multiple responses: missing one, adding extras or mixing → 0, whatever mode was stored; exactly the right set → full", [x, y, z, w].every((v) => Number(v.score) === 0 && v.correct === false) && Number(full.score) === 2 && full.correct === true, JSON.stringify([x.score, y.score, z.score, w.score]));
     x = await g({ type: "ORDERING", answer: { order: ["a", "b", "c", "d"] }, scoring: { mode: "PARTIAL" } }, { order: ["a", "b", "d", "c"] }, 4);
     y = await g({ type: "MATCHING", answer: { pairs: { l1: "r1", l2: "r2", l3: "r3" } }, scoring: { mode: "PARTIAL" } }, { pairs: { l1: "r1", l2: "r3", l3: "r2" } }, 3);
     z = await g({ type: "NUMERIC", answer: { value: 5, tolerance: 0 } }, { value: 5.01 }, 1);
     w = await g({ type: "SHORT", answer: { accepted: ["CPI"], caseSensitive: true } }, { text: "cpi" }, 1);
     const blank = await g({ type: "MCQ", answer: { correct: ["a"] } }, null, 1);
-    ok("Ordering partial 2/4 → 2; matching partial 1/3 → 1; numeric outside tolerance → 0; case-sensitive short → 0; unanswered → 0", Number(x.score) === 2 && Number(y.score) === 1 && Number(z.score) === 0 && Number(w.score) === 0 && Number(blank.score) === 0 && blank.correct === false, JSON.stringify([x.score, y.score, z.score, w.score, blank.score]));
+    ok("Ordering with 2 of 4 in place → 0; matching with 1 of 3 pairs → 0; numeric outside tolerance → 0; case-sensitive short → 0; unanswered → 0", Number(x.score) === 0 && Number(y.score) === 0 && Number(z.score) === 0 && Number(w.score) === 0 && Number(blank.score) === 0 && blank.correct === false, JSON.stringify([x.score, y.score, z.score, w.score, blank.score]));
 
     // ── result / review policies ──
     await as(users.inst);

@@ -20,7 +20,6 @@ import {
   type QuestionFull,
   type QuestionType,
   type ScenarioSummary,
-  type ScoringMode,
   title as scenarioTitle,
 } from "@/lib/exams/bank";
 import { AssetManager } from "./AssetManager";
@@ -87,18 +86,9 @@ function ItemRows({
   );
 }
 
-function ScoringSelect({ e, mode, modes, onChange }: { e: ExamLabels["bank"]["editor"]; mode: ScoringMode; modes: ScoringMode[]; onChange: (m: ScoringMode) => void }) {
-  return (
-    <Field label={e.scoring} className="max-w-md">
-      <select value={mode} onChange={(ev) => onChange(ev.target.value as ScoringMode)} className="field">
-        {modes.map((m) => (
-          <option key={m} value={m}>
-            {e.scoringModes[m]}
-          </option>
-        ))}
-      </select>
-    </Field>
-  );
+/** grading is the same for every multi-part question, so it is stated rather than chosen */
+function ScoringRule({ e }: { e: ExamLabels["bank"]["editor"] }) {
+  return <p className="rounded-xl bg-mist px-4 py-2.5 text-sm text-navy">{e.scoringRule}</p>;
 }
 
 /* ───────────── phase 10 editors ───────────── */
@@ -435,7 +425,7 @@ export function QuestionEditor({
                 </label>
               )}
             />
-            {q.type === "MULTI" && <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL", "PARTIAL_PENALTY"]} onChange={(mode) => set({ scoring: { mode } })} />}
+            {q.type === "MULTI" && <ScoringRule e={e} />}
             <details className="rounded-xl border border-line p-3">
               <summary className="cursor-pointer text-sm font-semibold text-navy">{e.rationale}</summary>
               <div className="mt-3 space-y-2">
@@ -522,7 +512,7 @@ export function QuestionEditor({
               {e.items} <span className="font-normal text-slate">— {e.itemsHint}</span>
             </p>
             <ItemRows e={e} list={q.content.items ?? []} onChange={(items) => setContent({ items })} reorder lead={(_, i) => <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-mist text-sm font-bold text-navy">{i + 1}</span>} />
-            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL"]} onChange={(mode) => set({ scoring: { mode } })} />
+            <ScoringRule e={e} />
           </div>
         )}
 
@@ -555,7 +545,7 @@ export function QuestionEditor({
                 )}
               />
             </div>
-            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL"]} onChange={(mode) => set({ scoring: { mode } })} />
+            <ScoringRule e={e} />
           </div>
         )}
 
@@ -564,7 +554,7 @@ export function QuestionEditor({
           <div className="space-y-3">
             <p className="field-label">{e.areas} <span className="font-normal text-slate">— {e.hotspotHint}</span></p>
             {q.id ? <HotspotEditor e={e} labels={labels} url={hotspotUrl} regions={q.answer.regions ?? []} onChange={(regions) => setAnswer({ regions })} /> : <Notice>{e.hotspotSaveFirst}</Notice>}
-            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL", "PARTIAL_PENALTY"]} onChange={(mode) => set({ scoring: { mode } })} />
+            <ScoringRule e={e} />
           </div>
         )}
 
@@ -607,7 +597,7 @@ export function QuestionEditor({
                 )}
               />
             </div>
-            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL", "PARTIAL_PENALTY"]} onChange={(mode) => set({ scoring: { mode } })} />
+            <ScoringRule e={e} />
           </div>
         )}
 
@@ -678,7 +668,7 @@ export function QuestionEditor({
                 </div>
               );
             })}
-            <ScoringSelect e={e} mode={(q.scoring.mode as ScoringMode) ?? "ALL_OR_NOTHING"} modes={["ALL_OR_NOTHING", "PARTIAL"]} onChange={(mode) => set({ scoring: { mode } })} />
+            <ScoringRule e={e} />
           </div>
         )}
 

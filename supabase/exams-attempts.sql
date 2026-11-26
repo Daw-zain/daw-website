@@ -72,6 +72,9 @@ begin
 end $$;
 
 -- ── grading of one answer from the frozen snapshot. Returns {score, correct, manual} ──
+-- Full mark or zero: a question with several parts (choices, pairs, order, areas, blanks) earns its mark only
+-- when every part is right. Any partial-credit setting stored with older questions is ignored.
+-- (Essays are the exception: a person grades them.)
 create or replace function public.exam_grade(p_snap jsonb, p_response jsonb, p_max numeric)
 returns jsonb
 language plpgsql
@@ -81,7 +84,6 @@ as $$
 declare
   t text := p_snap ->> 'type';
   a jsonb := coalesce(p_snap -> 'answer', '{}'::jsonb);
-  mode text := coalesce(p_snap -> 'scoring' ->> 'mode', 'ALL_OR_NOTHING');
   r jsonb := p_response;
   correct text[]; chosen text[]; hits int; wrongs int; n int; ok int; k text; txt text; acc text; v numeric;
 begin
@@ -105,12 +107,6 @@ begin
     n := cardinality(correct);
     if hits = n and wrongs = 0 then
       return jsonb_build_object('score', p_max, 'correct', true, 'manual', false);
-    end if;
-    if mode = 'PARTIAL' then
-      -- choosing extra options dilutes the credit (choosing everything never earns full marks)
-      return jsonb_build_object('score', round(p_max * hits / greatest(n, cardinality(chosen)), 2), 'correct', false, 'manual', false);
-    elsif mode = 'PARTIAL_PENALTY' then
-      return jsonb_build_object('score', round(p_max * greatest(hits - wrongs, 0) / n, 2), 'correct', false, 'manual', false);
     end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
 
@@ -139,10 +135,6 @@ begin
     select array_agg(x) into correct from jsonb_array_elements_text(a -> 'order') x;
     select array_agg(x) into chosen from jsonb_array_elements_text(coalesce(r -> 'order', '[]'::jsonb)) x;
     if chosen = correct then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
-    if mode = 'PARTIAL' and chosen is not null then
-      ok := (select count(*) from generate_subscripts(correct, 1) i where i <= cardinality(chosen) and chosen[i] = correct[i]);
-      return jsonb_build_object('score', round(p_max * ok / cardinality(correct), 2), 'correct', false, 'manual', false);
-    end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
 
   elsif t = 'MATCHING' then
@@ -151,8 +143,7 @@ begin
     for k in select jsonb_object_keys(a -> 'pairs') loop
       if (r -> 'pairs' ->> k) = (a -> 'pairs' ->> k) then ok := ok + 1; end if;
     end loop;
-    if ok = n then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
-    if mode = 'PARTIAL' then return jsonb_build_object('score', round(p_max * ok / n, 2), 'correct', false, 'manual', false); end if;
+    if n > 0 and ok = n then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
 
   -- ── phase 10 ──
@@ -179,11 +170,6 @@ begin
     -- never award marks against an empty key (exams only draw ACTIVE questions, which always have one)
     if coalesce(n, 0) = 0 then return jsonb_build_object('score', 0, 'correct', false, 'manual', false); end if;
     if hits = n and wrongs = 0 then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
-    if mode = 'PARTIAL' then
-      return jsonb_build_object('score', round(p_max * hits / greatest(n, ok), 2), 'correct', false, 'manual', false);
-    elsif mode = 'PARTIAL_PENALTY' then
-      return jsonb_build_object('score', round(p_max * greatest(hits - wrongs, 0) / n, 2), 'correct', false, 'manual', false);
-    end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
 
   elsif t = 'CLOZE' then
@@ -202,7 +188,6 @@ begin
       end if;
     end loop;
     if n > 0 and ok = n then return jsonb_build_object('score', p_max, 'correct', true, 'manual', false); end if;
-    if mode = 'PARTIAL' and n > 0 then return jsonb_build_object('score', round(p_max * ok / n, 2), 'correct', false, 'manual', false); end if;
     return jsonb_build_object('score', 0, 'correct', false, 'manual', false);
   end if;
   return jsonb_build_object('score', 0, 'correct', false, 'manual', false);

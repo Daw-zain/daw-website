@@ -542,7 +542,7 @@ function QuestionDetail({ programId, questionId, filter, locale, labels }: { pro
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
           <h4 className="mb-2 text-sm font-bold text-navy">{an.outcomes}</h4>
-          <Bars empty={an.noData} rows={[row("full", an.outcome.full, d.results.full, true), row("partial", an.outcome.partial, d.results.partial), row("zero", an.outcome.zero, d.results.zero), row("unanswered", an.outcome.unanswered, d.results.unanswered)]} />
+          <Bars empty={an.noData} rows={[row("full", an.outcome.full, d.results.full, true), ...(d.results.partial ? [row("partial", an.outcome.partial, d.results.partial)] : []), row("zero", an.outcome.zero, d.results.zero), row("unanswered", an.outcome.unanswered, d.results.unanswered)]} />
         </div>
         {d.options && (
           <div>

@@ -134,11 +134,11 @@ try {
     g = await grade(hsSnap, { points: [{ x: 15, y: 15 }, { x: 50, y: 5 }] });
     ok("Hotspot (all-or-nothing): one hit + one miss → 0", g.correct === false && Number(g.score) === 0, JSON.stringify(g));
     g = await grade({ ...hsSnap, scoring: { mode: "PARTIAL" } }, { points: [{ x: 15, y: 15 }] });
-    ok("Hotspot (partial): one of two areas → half marks", Number(g.score) === 2, JSON.stringify(g));
+    ok("Hotspot: one of two areas → 0, even with a stored partial mode", Number(g.score) === 0 && g.correct === false, JSON.stringify(g));
     g = await grade({ ...hsSnap, scoring: { mode: "PARTIAL_PENALTY" } }, { points: [{ x: 15, y: 15 }, { x: 50, y: 5 }] });
-    ok("Hotspot (penalty): one hit − one wrong mark → 0", Number(g.score) === 0, JSON.stringify(g));
+    ok("Hotspot: one hit and one wrong mark → 0", Number(g.score) === 0, JSON.stringify(g));
     g = await grade({ ...hsSnap, scoring: { mode: "PARTIAL" } }, { points: [{ x: 15, y: 15 }, { x: 20, y: 20 }] });
-    ok("Hotspot: two marks in the same area count once", Number(g.score) === 2 && g.correct === false, JSON.stringify(g));
+    ok("Hotspot: two marks in the same area do not cover both areas → 0", Number(g.score) === 0 && g.correct === false, JSON.stringify(g));
     g = await grade(hsSnap, { points: [{ x: 10, y: 10 }, { x: 90, y: 80 }] });
     ok("Hotspot: marks exactly on the area edge count", g.correct === true, JSON.stringify(g));
 
@@ -148,17 +148,17 @@ try {
     g = await grade(ddSnap, { place: { i1: "z1", i2: "z2", i3: "z1", i4: "z2" } });
     ok("Drag & drop: placing the distractor makes it not fully correct", g.correct === false && Number(g.score) === 0, JSON.stringify(g));
     g = await grade({ ...ddSnap, scoring: { mode: "PARTIAL" } }, { place: { i1: "z1", i2: "z1" } });
-    ok("Drag & drop (partial): 1 of 3 right → 1.33", Number(g.score) === 1.33, JSON.stringify(g));
+    ok("Drag & drop: 1 of 3 right → 0", Number(g.score) === 0, JSON.stringify(g));
     g = await grade({ ...ddSnap, scoring: { mode: "PARTIAL" } }, { place: { i1: "z1", i2: "z2", i3: "z1", i4: "z1", i5: "z2", i6: "z1" } });
-    ok("Drag & drop (partial): dumping every item into zones is diluted", Number(g.score) === 2, JSON.stringify(g));
+    ok("Drag & drop: all right items plus every distractor → 0", Number(g.score) === 0, JSON.stringify(g));
     g = await grade({ ...ddSnap, scoring: { mode: "PARTIAL_PENALTY" } }, { place: { i1: "z1", i2: "z1", i3: "z1" } });
-    ok("Drag & drop (penalty): 2 right − 1 wrong → 1.33", Number(g.score) === 1.33, JSON.stringify(g));
+    ok("Drag & drop: 2 right and 1 wrong → 0", Number(g.score) === 0, JSON.stringify(g));
 
     const czSnap = { type: "CLOZE", scoring: { mode: "PARTIAL" }, answer: { blanks: { 1: { correct: "o1" }, 2: { accepted: ["Closing"], caseSensitive: false } } } };
     g = await grade({ ...czSnap, scoring: { mode: "ALL_OR_NOTHING" } }, { blanks: { 1: "o1", 2: "  closing " } });
     ok("Cloze: right option + typed answer (case/space-insensitive) → full marks", g.correct === true && Number(g.score) === 4, JSON.stringify(g));
     g = await grade(czSnap, { blanks: { 1: "o2", 2: "closing" } });
-    ok("Cloze (partial): 1 of 2 blanks → half marks", Number(g.score) === 2 && g.correct === false, JSON.stringify(g));
+    ok("Cloze: 1 of 2 blanks → 0", Number(g.score) === 0 && g.correct === false, JSON.stringify(g));
     g = await grade({ ...czSnap, answer: { blanks: { 2: { accepted: ["Closing"], caseSensitive: true } } } }, { blanks: { 2: "closing" } });
     ok("Cloze: case-sensitive blank refuses the wrong case", Number(g.score) === 0, JSON.stringify(g));
     g = await grade(czSnap, null);
@@ -200,13 +200,13 @@ try {
 
     r = await j("exam_attempt_save", A, await aq(A, qHS), { points: [{ x: 15, y: 15 }, { x: 70, y: 70 }, { x: 1, y: 1 }] }, false);
     ok("Official attempt refuses a hotspot answer with too many marks", /invalid_response/.test(r.error ?? ""), r.error ?? "saved");
-    await j("exam_attempt_save", A, await aq(A, qHS), { points: [{ x: 15, y: 15 }, { x: 5, y: 95 }] }, false); // 1 hit, 1 wrong → penalty → 0
-    await j("exam_attempt_save", A, await aq(A, qDD), { place: { o1: "o1", o2: "o2", o3: "o2" } }, false); // 2/3 partial → 2.67
+    await j("exam_attempt_save", A, await aq(A, qHS), { points: [{ x: 15, y: 15 }, { x: 5, y: 95 }] }, false); // 1 hit, 1 wrong → 0
+    await j("exam_attempt_save", A, await aq(A, qDD), { place: { o1: "o1", o2: "o2", o3: "o2" } }, false); // 2 of 3 right → 0
     await j("exam_attempt_save", A, await aq(A, qCZ), { blanks: { 1: "o1", 2: "الاغلاق" } }, false); // full → 4
     await j("exam_attempt_save", A, await aq(A, qFG), { choice: "o1" }, false); // full → 4
     r = await j("exam_attempt_submit", A);
     const [att] = await tx.$queryRawUnsafe(`select "score"::text s, "maxScore"::text m, "status" from public."ExamAttempt" where "id"=$1`, A);
-    ok("Attempt graded on the server: 0 + 2.67 + 4 + 4 = 10.67 / 16", Number(att.s) === 10.67 && Number(att.m) === 16 && att.status === "COMPLETED", JSON.stringify(att));
+    ok("Attempt graded on the server, full mark or zero: 0 + 0 + 4 + 4 = 8 / 16", Number(att.s) === 8 && Number(att.m) === 16 && att.status === "COMPLETED", JSON.stringify(att));
     const rv = (await j("exam_attempt_review", A)).value;
     const rvHS = rv?.questions?.find((q) => q.data.type === "HOTSPOT");
     ok("After submit the review shows the hotspot areas (exam allows showing the answer)", rvHS?.answer?.regions?.length === 2 && Number(rvHS.score) === 0, JSON.stringify(rvHS?.answer ?? rv));
