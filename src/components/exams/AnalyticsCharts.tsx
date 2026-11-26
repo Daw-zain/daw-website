@@ -8,8 +8,8 @@ export function Stat({ label, value, hint }: { label: string; value: string | nu
   return (
     <div className="card p-4">
       <p className="text-sm text-slate">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-navy" dir="ltr" style={{ textAlign: "start" }}>
-        <bdi>{value}</bdi>
+      <p className="mt-1 text-2xl font-bold text-navy">
+        <bdi dir="ltr">{value}</bdi>
       </p>
       {hint && <p className="mt-1 text-xs text-slate">{hint}</p>}
     </div>

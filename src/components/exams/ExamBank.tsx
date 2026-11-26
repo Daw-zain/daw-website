@@ -202,7 +202,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-xl border border-line bg-mist p-1" role="tablist">
+        <div className="flex max-w-full flex-wrap gap-1 rounded-xl border border-line bg-mist p-1" role="tablist">
           {(["questions", "scenarios", "categories", ...(can.import || can.export ? (["transfer"] as const) : [])] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("rounded-lg px-4 py-2 text-sm font-semibold transition", tab === t ? "bg-white text-navy shadow-sm" : "text-slate hover:text-navy")}>
               {b.tabs[t]}
