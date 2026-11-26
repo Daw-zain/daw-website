@@ -108,8 +108,11 @@ declare v_program text := split_part(coalesce(p_name, ''), '/', 1);
 begin
   if v_program = '' then return false; end if;
   if p_action = 'read' then
-    -- later phases add: a learner during an attempt that contains this asset's question
-    return coalesce(public.exam_is_course_staff(v_program), false);
+    -- staff of the course, or (phase 6) a learner whose own attempt contains this question / scenario
+    return coalesce(public.exam_is_course_staff(v_program), false)
+      or exists (select 1 from public."AttemptQuestion" q join public."ExamAttempt" a on a."id" = q."attemptId"
+                 where a."memberId" = (public.exam_current_member())."id" and a."programId" = v_program
+                   and split_part(p_name, '/', 2) in (q."questionId", q."scenarioId"));
   elsif p_action = 'write' then
     return coalesce(public.exam_instructor_can(v_program, 'canEditQuestions') or public.exam_instructor_can(v_program, 'canManageScenarios'), false);
   end if;

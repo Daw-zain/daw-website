@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { courseTitle, rpc, useExamSession } from "@/lib/exams/client";
+import { courseTitle, rpc, useExamSession, utcDate } from "@/lib/exams/client";
 import { title } from "@/lib/exams/bank";
 import type { ExamStatus, FolderExams } from "@/lib/exams/builder";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
   const course = state.status === "ready" && data ? state.me.courses.find((c) => c.programId === data.folder.programId) : undefined;
   const folderName = data ? (ar ? data.folder.nameAr : data.folder.nameEn) : "";
   const staff = course && course.access !== "LEARNER";
-  const fmt = (d: string | null) => (d ? new Date(d).toLocaleString(ar ? "ar-LY" : "en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
+  const fmt = (d: string | null) => (d ? utcDate(d)!.toLocaleString(ar ? "ar-LY" : "en-GB", { dateStyle: "medium", timeStyle: "short" }) : "");
 
   return (
     <ExamShell
@@ -97,11 +97,13 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                     </dl>
                     <div className="mt-auto pt-4">
                       {staff ? (
-                        <Link href={`/${locale}/exams/exam?id=${encodeURIComponent(e.id)}`} className="btn btn-outline btn-sm">
-                          {labels.bank.edit}
-                        </Link>
+                        <div className="flex flex-wrap gap-2">
+                          <Link href={`/${locale}/exams/exam?id=${encodeURIComponent(e.id)}`} className="btn btn-outline btn-sm">{labels.bank.edit}</Link>
+                          {e.status !== "DRAFT" && <Link href={`/${locale}/exams/attempts?id=${encodeURIComponent(e.id)}`} className="btn btn-outline btn-sm">{labels.staffAttempts.open}</Link>}
+                          {e.status === "PUBLISHED" && <Link href={`/${locale}/exams/take?id=${encodeURIComponent(e.id)}`} className="btn btn-outline btn-sm">{labels.take.open}</Link>}
+                        </div>
                       ) : (
-                        <p className="text-sm text-slate">{bl.learnerSoon}</p>
+                        <Link href={`/${locale}/exams/take?id=${encodeURIComponent(e.id)}`} className="btn btn-primary btn-sm">{labels.take.open}</Link>
                       )}
                     </div>
                   </li>

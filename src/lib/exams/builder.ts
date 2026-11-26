@@ -1,7 +1,7 @@
 "use client";
 
 /** Exam builder (phase 5) — browser types and helpers. Everything is validated again by exam_exam_* functions. */
-import { ExamError } from "./client";
+import { ExamError, utcDate } from "./client";
 import type { Difficulty, QuestionType, QStatus } from "./bank";
 
 export type ExamStatus = "DRAFT" | "PENDING_APPROVAL" | "PUBLISHED" | "STOPPED" | "ARCHIVED";
@@ -134,8 +134,8 @@ export const blankRule = (): ExamRuleRow => ({ count: 5, domainId: null, topicId
 
 /** ISO ↔ <input type="datetime-local"> (local time, minutes) */
 export const toLocalInput = (iso: string | null) => {
-  if (!iso) return "";
-  const d = new Date(iso);
+  const d = utcDate(iso);
+  if (!d) return "";
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };

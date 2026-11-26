@@ -515,6 +515,7 @@ model Question {
   secret      QuestionSecret?
   versions    QuestionVersion[]
   examItems   ExamItem[]
+  attemptQuestions AttemptQuestion[]
   // Phase 4: a question may belong to one multi-question scenario (shared case text, shown once)
   scenarioId    String?
   scenario      Scenario?       @relation(fields: [scenarioId], references: [id], onDelete: Restrict)
@@ -659,6 +660,9 @@ model Exam {
   updatedAt         DateTime   @default(now()) @updatedAt
   items             ExamItem[]
   rules             ExamRule[]
+  resultsReleasedAt DateTime? // for resultsPolicy MANUAL
+  attempts          ExamAttempt[]
+  extraAttempts     ExamExtraAttempt[]
 
   @@index([programId, status])
   @@index([folderId])
@@ -694,4 +698,85 @@ model ExamRule {
   weight     Decimal? @db.Decimal(8, 2)
 
   @@index([examId, position])
+}
+
+// ───────────── Exam system · Phase 6: attempts, server timer, grading ─────────────
+// When a learner starts, the questions are drawn ONCE and frozen in AttemptQuestion together with the
+// question version used. "publicData" is what the browser receives (shuffled, no answer); "snapshot"
+// holds the full question + answer and is only read by the grading / review functions.
+
+model ExamAttempt {
+  id            String            @id @default(dbgenerated("gen_random_uuid()::text"))
+  examId        String
+  exam          Exam              @relation(fields: [examId], references: [id], onDelete: Restrict)
+  programId     String
+  memberId      String
+  attemptNo     Int
+  status        String            @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED (awaiting essay grading) | COMPLETED | TIMED_OUT | ABANDONED | UNDER_REVIEW | CANCELLED
+  startedAt     DateTime          @default(now())
+  deadlineAt    DateTime? // server-side end of the attempt (null = untimed)
+  graceSeconds  Int               @default(0)
+  lastSeenAt    DateTime          @default(now())
+  submittedAt   DateTime?
+  gradedAt      DateTime?
+  score         Decimal?          @db.Decimal(10, 2)
+  maxScore      Decimal?          @db.Decimal(10, 2)
+  percent       Decimal?          @db.Decimal(5, 2)
+  passed        Boolean?
+  questionCount Int               @default(0)
+  answeredCount Int               @default(0)
+  flaggedCount  Int               @default(0)
+  correctCount  Int               @default(0)
+  wrongCount    Int               @default(0)
+  needsManual   Boolean           @default(false)
+  warnings      Int               @default(0)
+  settings      Json              @default("{}") // exam settings frozen at start (policies, tools, security, pass mark)
+  staffNote     String            @default("")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
+  questions     AttemptQuestion[]
+
+  @@index([examId, memberId])
+  @@index([memberId, status])
+}
+
+model AttemptQuestion {
+  id              String      @id @default(dbgenerated("gen_random_uuid()::text"))
+  attemptId       String
+  attempt         ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  position        Int
+  questionId      String
+  question        Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionVersion Int
+  scenarioId      String?
+  type            String
+  points          Decimal     @db.Decimal(8, 2) // effective points × weight for this attempt
+  publicData      Json // what the learner sees: stem, shuffled options/items, unit, word limits, image paths
+  snapshot        Json // full question incl. answer, feedback, explanation (server only)
+  response        Json? // the learner's answer
+  flagged         Boolean     @default(false)
+  savedAt         DateTime?
+  score           Decimal?    @db.Decimal(8, 2)
+  isCorrect       Boolean?
+  manualScore     Decimal?    @db.Decimal(8, 2)
+  graderComment   String      @default("")
+  gradedById      String?
+  gradedAt        DateTime?
+
+  @@unique([attemptId, position])
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+// extra attempts granted by staff beyond Exam.maxAttempts
+model ExamExtraAttempt {
+  id          String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  examId      String
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  memberId    String
+  extra       Int      @default(1)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([examId, memberId])
 }

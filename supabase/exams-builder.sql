@@ -402,6 +402,10 @@ begin
   select * into e from public."Exam" where "id" = p_id;
   if e."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   perform public.exam_require_exam_editor(e."folderId");
+  -- phase 6: once learners have attempts, the exam can be stopped or archived but never edited again
+  if p_status = 'DRAFT' and exists (select 1 from public."ExamAttempt" where "examId" = p_id) then
+    raise exception 'exam_has_attempts' using errcode = '42501';
+  end if;
   if not ((e."status" = 'PUBLISHED' and p_status = 'STOPPED')
        or (e."status" in ('STOPPED', 'PENDING_APPROVAL') and p_status = 'DRAFT')
        or (e."status" in ('STOPPED', 'DRAFT') and p_status = 'ARCHIVED')
@@ -425,6 +429,7 @@ begin
   if e."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   perform public.exam_require_exam_editor(e."folderId");
   if e."status" not in ('DRAFT', 'ARCHIVED') then raise exception 'exam_locked' using errcode = '42501'; end if;
+  if exists (select 1 from public."ExamAttempt" where "examId" = p_id) then raise exception 'exam_has_attempts' using errcode = '42501'; end if;
   delete from public."Exam" where "id" = p_id;
   perform public.exam_log('exam.delete', 'Exam', p_id, e."programId", jsonb_build_object('titleAr', e."titleAr"));
   return jsonb_build_object('deleted', p_id);

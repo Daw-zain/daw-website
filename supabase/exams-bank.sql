@@ -501,6 +501,10 @@ begin
   if exists (select 1 from public."ExamItem" where "questionId" = p_id) then
     raise exception 'question_in_exam' using errcode = '23503';
   end if;
+  -- phase 6: answered in an attempt → keep it (disable instead) so past results stay intact
+  if exists (select 1 from public."AttemptQuestion" where "questionId" = p_id) then
+    raise exception 'question_in_attempt' using errcode = '23503';
+  end if;
   select coalesce(jsonb_agg("path"), '[]'::jsonb) into v_paths from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
   delete from public."ExamAsset" where "ownerType" = 'QUESTION' and "ownerId" = p_id;
   delete from public."Question" where "id" = p_id;

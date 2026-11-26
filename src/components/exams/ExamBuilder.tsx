@@ -172,6 +172,9 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
       <div className="flex flex-wrap items-center gap-3">
         <span className={cn("rounded-md px-2.5 py-1 text-sm font-semibold", statusClass(e.status))}>{bl.statuses[e.status]}</span>
         {e.id && <span className="text-sm text-slate">{b.version}{e.version}</span>}
+        {e.id && e.status !== "DRAFT" && (
+          <Link href={`/${locale}/exams/attempts?id=${encodeURIComponent(e.id)}`} className="btn btn-outline btn-sm">{labels.staffAttempts.open}</Link>
+        )}
         <Link href={`/${locale}/exams/folder?id=${encodeURIComponent(e.folderId)}`} className="ms-auto text-sm font-semibold text-brand hover:underline">
           {ar ? "→" : "←"} {bl.backFolder}
         </Link>

@@ -151,4 +151,14 @@ export function useExamSession(locale: string) {
   return { state, reload: load };
 }
 
+/**
+ * Timestamps from the database are UTC but come without a zone for "timestamp" columns
+ * (e.g. "2026-11-26T11:34:16.842"); new Date() would read them as LOCAL time (2 h off in Libya).
+ * Always parse through this.
+ */
+export function utcDate(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${v}Z`);
+}
+
 export const courseTitle = (c: { titleAr: string; titleEn: string }, locale: string) => (locale === "ar" ? c.titleAr : c.titleEn);
