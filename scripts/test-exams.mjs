@@ -106,6 +106,32 @@ try {
     const [l] = await tx.$queryRawUnsafe(`select count(*)::int n from public."ExamAuditLog" where "createdAt" > now() - interval '5 minutes' and "action" in ('instructor.assign','enrollment.set')`);
     ok("Admin actions written to the exam audit log", l.n >= 3, `${l.n} entries`);
 
+    // ── Phase 2 additions (admin panel functions) ──
+    await as(users.admin);
+    r = await call("select public.exam_admin_members('phase1.test')");
+    const ins = r.value?.find((m) => m.email === users.instructor.email);
+    const lea = r.value?.find((m) => m.email === users.learner.email);
+    ok("Admin member list: instructor perms + enrollment status included",
+      ins?.instructing?.[0]?.programId === PMP && ins.instructing[0].canPublishExams === true && lea?.enrollments?.[0]?.status === "SUSPENDED",
+      JSON.stringify({ ins: ins?.instructing, lea: lea?.enrollments }));
+    r = await call("select public.exam_admin_set_active($1, false)", users.admin.email);
+    ok("Admin cannot disable own account", /cannot_disable_self/.test(r.error), r.error);
+    r = await call("select public.exam_admin_set_active($1, false)", users.learner.email);
+    ok("Admin disables learner", r.value?.active === false, r.error ?? "");
+    await as(users.learner);
+    r = await call("select public.exam_me()");
+    ok("Disabled member → exam_me refused (account_disabled)", /account_disabled/.test(r.error), r.error);
+    await as(users.instructor);
+    r = await call("select public.exam_admin_set_active($1, true)", users.learner.email);
+    ok("Instructor cannot enable/disable members", /forbidden/.test(r.error), r.error);
+    await as(users.admin);
+    // (void function: select a constant from it — Prisma cannot read a "void" column)
+    r = await call("select 1 as done from public.exam_admin_remove_instructor($1, $2)", PMP, users.instructor.email);
+    ok("Admin removes instructor from PMP", r.value === 1, r.error ?? "");
+    await as(users.instructor);
+    r = await call("select public.exam_course_folders($1)", PMP);
+    ok("Removed instructor → PMP refused", /forbidden/.test(r.error), r.error);
+
     throw ROLLBACK;
   }, { timeout: 60000 });
 } catch (e) {

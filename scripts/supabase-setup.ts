@@ -28,9 +28,12 @@ if (pg !== schema) {
   console.log("✔ Prisma provider → postgresql");
 }
 
-run("npx prisma generate");
-run("npx prisma db push --skip-generate");
-run("npx tsx --env-file-if-exists=.env prisma/seed.ts");
+// `npm run supabase:setup -- --sql-only` re-applies only the SQL files (functions, grants) — no schema push, no seed
+if (!process.argv.includes("--sql-only")) {
+  run("npx prisma generate");
+  run("npx prisma db push --skip-generate");
+  run("npx tsx --env-file-if-exists=.env prisma/seed.ts");
+}
 
 /** split SQL into statements, keeping $$ … $$ bodies together */
 function statements(sql: string) {

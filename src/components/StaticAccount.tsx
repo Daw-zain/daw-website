@@ -15,6 +15,7 @@ type Labels = {
   savedList: string;
   noFavorites: string;
   knowledge: string;
+  exams: string;
 };
 
 /** Learner dashboard on the static site: the session lives in the browser (Supabase Auth). */
@@ -53,6 +54,9 @@ export function StaticAccount({ locale, labels, resources }: { locale: string; l
     <>
       <PageHero title={`${labels.welcome}${locale === "ar" ? "، " : ", "}${name}`} text={labels.dashboardText}>
         <div className="mt-6 flex flex-wrap gap-3">
+          <Link href={`/${locale}/exams`} className="btn btn-gold btn-sm">
+            {labels.exams}
+          </Link>
           <button type="button" onClick={logout} className="btn btn-ghost-light btn-sm">
             {labels.logout}
           </button>

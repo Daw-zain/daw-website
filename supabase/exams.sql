@@ -230,8 +230,10 @@ begin
   return (
     select coalesce(jsonb_agg(jsonb_build_object(
       'id', m."id", 'email', m."email", 'name', m."name", 'role', m."role", 'active', m."active", 'createdAt', m."createdAt",
-      'instructing', (select coalesce(jsonb_agg(ci."programId"), '[]'::jsonb) from public."CourseInstructor" ci where ci."memberId" = m."id"),
-      'enrolled', (select coalesce(jsonb_agg(e."programId"), '[]'::jsonb) from public."Enrollment" e where e."memberId" = m."id" and e."status" = 'ACTIVE')
+      'instructing', (select coalesce(jsonb_agg(to_jsonb(ci) - 'id' - 'memberId' - 'createdAt' - 'updatedAt'), '[]'::jsonb)
+                      from public."CourseInstructor" ci where ci."memberId" = m."id"),
+      'enrollments', (select coalesce(jsonb_agg(jsonb_build_object('programId', e."programId", 'status', e."status", 'since', e."createdAt")), '[]'::jsonb)
+                      from public."Enrollment" e where e."memberId" = m."id")
     ) order by m."createdAt" desc), '[]'::jsonb)
     from public."ExamMember" m
     where coalesce(p_search, '') = '' or m."email" ilike '%' || p_search || '%' or m."name" ilike '%' || p_search || '%'
@@ -261,6 +263,27 @@ begin
   update public."ExamMember" set "role" = p_role, "updatedAt" = now() where "id" = target."id";
   perform public.exam_log('member.role', 'ExamMember', target."id", null, jsonb_build_object('from', target."role", 'to', p_role));
   return jsonb_build_object('email', target."email", 'role', p_role);
+end $$;
+
+-- Admin: enable / disable a member (a disabled member is refused by every exam_* function)
+create or replace function public.exam_admin_set_active(p_email text, p_active boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare me public."ExamMember" := public.exam_require_admin(); target public."ExamMember";
+begin
+  select * into target from public."ExamMember" where "email" = lower(trim(p_email));
+  if target."id" is null then
+    raise exception 'member_not_found' using errcode = 'P0002';
+  end if;
+  if not p_active and target."id" = me."id" then
+    raise exception 'cannot_disable_self' using errcode = '42501';
+  end if;
+  update public."ExamMember" set "active" = p_active, "updatedAt" = now() where "id" = target."id";
+  perform public.exam_log(case when p_active then 'member.enable' else 'member.disable' end, 'ExamMember', target."id", null, null);
+  return jsonb_build_object('email', target."email", 'active', p_active);
 end $$;
 
 -- Admin: assign (or update) an instructor on a course with permissions
@@ -398,6 +421,7 @@ revoke all on function public.exam_me() from public, anon;
 revoke all on function public.exam_course_folders(text) from public, anon;
 revoke all on function public.exam_admin_members(text) from public, anon;
 revoke all on function public.exam_admin_set_role(text, text) from public, anon;
+revoke all on function public.exam_admin_set_active(text, boolean) from public, anon;
 revoke all on function public.exam_admin_assign_instructor(text, text, jsonb) from public, anon;
 revoke all on function public.exam_admin_remove_instructor(text, text) from public, anon;
 revoke all on function public.exam_admin_enroll(text, text, text, text) from public, anon;
@@ -407,6 +431,7 @@ grant execute on function public.exam_me() to authenticated;
 grant execute on function public.exam_course_folders(text) to authenticated;
 grant execute on function public.exam_admin_members(text) to authenticated;
 grant execute on function public.exam_admin_set_role(text, text) to authenticated;
+grant execute on function public.exam_admin_set_active(text, boolean) to authenticated;
 grant execute on function public.exam_admin_assign_instructor(text, text, jsonb) to authenticated;
 grant execute on function public.exam_admin_remove_instructor(text, text) to authenticated;
 grant execute on function public.exam_admin_enroll(text, text, text, text) to authenticated;
