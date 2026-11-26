@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { ExamError, rpc, useExamSession, utcDate } from "@/lib/exams/client";
 import { fmtClock, isAnswered, type AttemptState, type Response } from "@/lib/exams/attempt";
@@ -146,8 +147,9 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
   const low = remaining !== null && remaining < 5 * 60 * 1000;
   const side = scenario && scenario.displayMode !== "SECTION";
 
-  return (
-    // focused exam mode: a full-viewport layer above the site header/footer
+  // focused exam mode: a full-viewport layer above the site header/footer. Rendered into <body> through a
+  // portal — the page wrapper has a CSS transform, which would otherwise trap "position: fixed" inside it.
+  return createPortal(
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-mist" dir={ar ? "rtl" : "ltr"}>
       {/* top bar */}
       <div className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
@@ -312,6 +314,7 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
