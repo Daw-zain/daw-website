@@ -17,7 +17,7 @@ export type Category = { id: string; parentId: string | null; kind: CategoryKind
 export type BankOverview = {
   categories: Category[];
   counts: { total: number; scenarios: number; byStatus: Partial<Record<QStatus, number>>; byType: Partial<Record<QuestionType, number>> };
-  can: { edit: boolean; delete: boolean; categories: boolean; scenarios: boolean };
+  can: { edit: boolean; delete: boolean; categories: boolean; scenarios: boolean; import: boolean; export: boolean };
 };
 
 // ── phase 4: scenarios + attachments ──

@@ -366,7 +366,9 @@ begin
       'edit', public.exam_instructor_can(p_program, 'canEditQuestions'),
       'delete', public.exam_instructor_can(p_program, 'canDeleteQuestions'),
       'categories', public.exam_instructor_can(p_program, 'canManageCategories'),
-      'scenarios', public.exam_instructor_can(p_program, 'canManageScenarios')));
+      'scenarios', public.exam_instructor_can(p_program, 'canManageScenarios'),
+      'import', public.exam_instructor_can(p_program, 'canImport'),
+      'export', public.exam_instructor_can(p_program, 'canExport')));
 end $$;
 
 -- Create or rename a category. Hierarchy: DOMAIN → TOPIC → SUBTOPIC, all inside the same course.
@@ -503,8 +505,20 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+begin
+  return public.exam_bank_question_write(p_program, p_q, public.exam_require_perm(p_program, 'canEditQuestions'));
+end $$;
+
+-- the actual write, shared by the editor (canEditQuestions) and import (canImport, phase 11).
+-- Internal: the caller has already checked the permission and passes the member.
+create or replace function public.exam_bank_question_write(p_program text, p_q jsonb, p_me public."ExamMember")
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
-  me public."ExamMember" := public.exam_require_perm(p_program, 'canEditQuestions');
+  me public."ExamMember" := p_me;
   v_id text := nullif(p_q ->> 'id', '');
   v_type text := p_q ->> 'type';
   v_status text := coalesce(nullif(p_q ->> 'status', ''), 'DRAFT');
@@ -690,6 +704,7 @@ revoke all on function public.exam_require_perm(text, text) from public, anon, a
 revoke all on function public.exam_bank_list(jsonb, int, text) from public, anon, authenticated;
 revoke all on function public.exam_bank_validate(text, jsonb, jsonb, jsonb) from public, anon, authenticated;
 revoke all on function public.exam_bank_figure(jsonb) from public, anon, authenticated;
+revoke all on function public.exam_bank_question_write(text, jsonb, public."ExamMember") from public, anon, authenticated;
 revoke all on function public.exam_bank_hotspot_ready(text) from public, anon, authenticated;
 revoke all on function public.exam_bank_question_json(text) from public, anon, authenticated;
 

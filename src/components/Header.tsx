@@ -94,6 +94,18 @@ export function Header({ locale, t, signedIn }: { locale: Locale; t: Pick<Dictio
             <GlobeIcon className="h-4 w-4 max-[380px]:hidden" />
             <span>{other.toUpperCase()}</span>
           </Link>
+          {/* sign in / my account — always visible (it used to live only inside the mobile menu) */}
+          <Link
+            href={L("/account")}
+            aria-current={isActive(L("/account")) ? "page" : undefined}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+            <span className="max-sm:sr-only">{signedIn ? t.nav.account : t.nav.login}</span>
+          </Link>
           <Link href={L("/register")} className="btn btn-gold btn-sm hidden sm:inline-flex">
             {t.nav.enroll}
           </Link>

@@ -23,6 +23,7 @@ import { QuestionEditor } from "./QuestionEditor";
 import { QuestionPreview } from "./QuestionPreview";
 import { BankScenarios } from "./BankScenarios";
 import { removeFiles } from "./AssetManager";
+import { BankTransfer } from "./BankTransfer";
 
 /** /[locale]/exams/bank?id=… — one course's question bank (admins and that course's instructors only) */
 export function ExamBank(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -74,7 +75,9 @@ const PAGE = 20;
 function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; labels: ExamLabels }) {
   const b = labels.bank;
   const [overview, setOverview] = useState<BankOverview | null>(null);
-  const [tab, setTab] = useState<"questions" | "scenarios" | "categories">("questions");
+  const [tab, setTab] = useState<"questions" | "scenarios" | "categories" | "transfer">("questions");
+  // phase 11: questions picked for "export selected"
+  const [picked, setPicked] = useState<string[]>([]);
   const [scenarioOpen, setScenarioOpen] = useState<string | null>(null);
   const [returnScenario, setReturnScenario] = useState<string | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
@@ -195,7 +198,7 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-xl border border-line bg-mist p-1" role="tablist">
-          {(["questions", "scenarios", "categories"] as const).map((t) => (
+          {(["questions", "scenarios", "categories", ...(can.import || can.export ? (["transfer"] as const) : [])] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("rounded-lg px-4 py-2 text-sm font-semibold transition", tab === t ? "bg-white text-navy shadow-sm" : "text-slate hover:text-navy")}>
               {b.tabs[t]}
               {t === "questions" && <span className="ms-1.5 text-slate">({overview.counts.total})</span>}
@@ -214,7 +217,27 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
       {flash && <Notice tone={flash.tone}>{flash.text}</Notice>}
       {!can.edit && <Notice>{b.readOnly}</Notice>}
 
-      {tab === "scenarios" ? (
+      {can.export && tab === "questions" && picked.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2 text-sm">
+          <span>{b.transfer.pickedN.replace("{n}", String(picked.length))}</span>
+          <button type="button" onClick={() => setTab("transfer")} className="btn btn-primary btn-sm">{b.transfer.exportPicked}</button>
+          <button type="button" onClick={() => setPicked([])} className="text-gold-600 hover:underline">{b.transfer.clearSelection}</button>
+        </div>
+      )}
+
+      {tab === "transfer" ? (
+        <BankTransfer
+          programId={course.programId}
+          courseCode={course.code ?? ""}
+          categories={cats}
+          can={{ import: can.import, export: can.export, categories: can.categories }}
+          selectedIds={picked}
+          onClearSelection={() => setPicked([])}
+          onImported={refresh}
+          locale={locale}
+          labels={labels}
+        />
+      ) : tab === "scenarios" ? (
         <BankScenarios
           programId={course.programId}
           canEdit={can.scenarios}
@@ -263,6 +286,9 @@ function Bank({ course, locale, labels }: { course: ExamCourse; locale: string; 
               {list.items.map((q) => (
                 <li key={q.id} className={cn("card p-4 sm:p-5", q.status === "DISABLED" && "opacity-70")}>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {can.export && (
+                      <input type="checkbox" checked={picked.includes(q.id)} onChange={(e) => setPicked(e.target.checked ? [...picked, q.id] : picked.filter((x) => x !== q.id))} className="h-4 w-4 accent-[var(--color-brand)]" aria-label={b.transfer.pick} />
+                    )}
                     <span className="rounded-md bg-navy px-2 py-0.5 font-semibold text-white">{b.types[q.type]}</span>
                     <span className={cn("rounded-md px-2 py-0.5 font-semibold", q.status === "ACTIVE" ? "bg-emerald-50 text-emerald-700" : q.status === "DRAFT" ? "bg-sky-50 text-navy" : "bg-gold/10 text-gold-600")}>{b.statuses[q.status]}</span>
                     <span className="rounded-md bg-mist px-2 py-0.5 text-slate">{b.difficulties[q.difficulty]}</span>
