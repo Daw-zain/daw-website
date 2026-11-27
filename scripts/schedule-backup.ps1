@@ -17,7 +17,8 @@ if ($Remove) {
 }
 
 New-Item -ItemType Directory -Force (Join-Path $project "backups") | Out-Null
-$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument '/c npm.cmd run backup >> backups\backup.log 2>&1' -WorkingDirectory $project
+# no window: an empty console that appears during the backup is easily closed, which stops it halfway
+$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument '--headless cmd.exe /c "npm.cmd run backup >> backups\backup.log 2>&1"' -WorkingDirectory $project
 $trigger = New-ScheduledTaskTrigger -Daily -At $Time
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings -Description "Daily backup of the Daw website and platform" -Force | Out-Null
