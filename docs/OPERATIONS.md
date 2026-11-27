@@ -97,12 +97,14 @@ Configure SPF/DKIM for your domain with your provider so emails aren't marked as
 | Every database table (website and platform), tested by a trial restore | `backups/full-<time>/` | `DATABASE_URL` |
 | Files uploaded in the local dashboard | `backups/full-<time>/storage/` | — |
 | Files of the online platform (course files and videos, question attachments, member documents, covers) | `backups/files/` | `SUPABASE_SECRET_KEY` |
-| Supabase sign-in accounts | **not included** | — |
+| List of Supabase sign-in accounts (e-mail, phone, dates, profile data; **no** passwords or second factors) | `backups/full-<time>/auth-users.json` | `SUPABASE_SECRET_KEY` |
 
 ```powershell
-npm.cmd run backup        # regular backup, keeps the latest 30 database backups
+npm.cmd run backup        # regular backup, keeps the latest 30 complete backups (BACKUP_KEEP)
 npm.cmd run backup:full   # before a change: same, and removes nothing
 ```
+
+A backup is **complete** when the database, the online files and the account list were all saved; only then does its folder get `complete.json`. Incomplete backups end with an error, are not counted among the 30, and are never removed automatically (nor are folders made before this mark existed): delete old ones yourself when you no longer need them. The account list is a record only: it cannot restore anyone's password.
 
 ### Online files: add the secret key once
 
@@ -120,7 +122,7 @@ This key can read and change all platform data. Without it the backup still save
 powershell -ExecutionPolicy Bypass -File scripts\schedule-backup.ps1
 ```
 
-Every day at 21:00 (`-Time 13:30` changes it, `-Remove` stops it). Results are added to `backups\backup.log`: read it from time to time. The computer must be switched on for the task to run.
+Every day at 21:00 (`-Time 13:30` changes it, `-Remove` stops it). The computer must be switched on, with you signed in to Windows. In Task Scheduler, **Last Run Result** of `DawSiteBackup` is `0x0` only when the backup was complete; the reason for a failure is at the end of `backups\backup.log`. Windows shows no pop-up, so check from time to time. After moving the project folder, run the command again.
 
 On Linux: `0 2 * * * cd /var/www/daw-site && npm run backup >> backups/backup.log 2>&1`
 

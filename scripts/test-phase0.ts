@@ -87,14 +87,18 @@ async function backups() {
 
     // pruning removes only complete backups of ours, oldest first
     const p = path.join(root, "prune");
-    for (const [name, manifest] of [["full-2026-01-01-00-00-00", true], ["full-2026-01-02-00-00-00", true], ["full-2026-01-03-00-00-00", true], ["full-2025-01-01-00-00-00", false], ["2026-01-01-00-00-00", true], ["files", false], ["my photos", false]] as const) {
+    // [name, has a manifest, is marked complete]; 01-04 and 01-05 are newer backups that stayed incomplete
+    for (const [name, manifest, complete] of [["full-2026-01-01-00-00-00", true, true], ["full-2026-01-02-00-00-00", true, true], ["full-2026-01-03-00-00-00", true, true], ["full-2026-01-04-00-00-00", true, false], ["full-2026-01-05-00-00-00", true, false], ["full-2025-01-01-00-00-00", false, false], ["2026-01-01-00-00-00", true, true], ["files", false, false], ["my photos", false, false]] as const) {
       await mkdir(path.join(p, name), { recursive: true });
       if (manifest) await writeFile(path.join(p, name, "manifest.json"), JSON.stringify({ format: "daw-full-backup" }));
+      if (complete) await writeFile(path.join(p, name, "complete.json"), "{}");
     }
     const removed = await prune(p, 2);
     const left = (await readdir(p)).sort();
-    ok("Only the oldest complete backup beyond the limit is removed", JSON.stringify(removed) === JSON.stringify(["full-2026-01-01-00-00-00"]) && left.length === 6 && left.includes("files") && left.includes("my photos") && left.includes("full-2025-01-01-00-00-00"), { removed, left });
-    ok("The newest backup is never removed", (await prune(p, 0)).length === 1 && (await readdir(p)).includes("full-2026-01-03-00-00-00"));
+    ok("Only the oldest complete backup beyond the limit is removed", JSON.stringify(removed) === JSON.stringify(["full-2026-01-01-00-00-00"]) && left.length === 8 && left.includes("files") && left.includes("my photos") && left.includes("full-2025-01-01-00-00-00"), { removed, left });
+    ok("Incomplete backups are neither counted nor removed", left.includes("full-2026-01-02-00-00-00") && left.includes("full-2026-01-04-00-00-00") && left.includes("full-2026-01-05-00-00-00"), left);
+    ok("The newest complete backup is never removed", (await prune(p, 0)).length === 1 && (await readdir(p)).includes("full-2026-01-03-00-00-00"));
+    ok("A backup without the online files is not marked complete", !existsSync(path.join(run.dir, "complete.json")));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -115,6 +119,10 @@ async function files() {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
+      if (url.startsWith("/auth/v1/admin/users")) {
+        res.setHeader("content-type", "application/json");
+        return res.end(JSON.stringify({ users: [{ id: "u1", email: "a@example.test", encrypted_password: "secret-hash", factors: [{ secret: "mfa-secret" }] }] }));
+      }
       if (url === "/storage/v1/bucket") return res.end(JSON.stringify(Object.keys(store).map((id) => ({ id }))));
       const list = url.match(/^\/storage\/v1\/object\/list\/(.+)$/);
       if (list) {
@@ -164,6 +172,9 @@ async function files() {
       return { r, lines, listed: JSON.parse(await readFile(path.join(r.dir, "files.json"), "utf8")) as unknown[], size: (await stat(path.join(root, "files", "course-files", "p1", "new.pdf"))).size };
     })();
     ok("With the key one command backs up database and files", run.r.filesIncluded && run.r.filesOk && run.listed.length === 134 && run.size === 3, run.lines);
+    const accounts = await readFile(path.join(run.r.dir, "auth-users.json"), "utf8");
+    ok("Sign-in accounts are exported without passwords or second-factor secrets", JSON.parse(accounts).count === 1 && accounts.includes("a@example.test") && !/secret-hash|mfa-secret|test-key/.test(accounts), accounts);
+    ok("A backup with everything is marked complete", existsSync(path.join(run.r.dir, "complete.json")));
     ok("The key is never printed", !run.lines.join("\n").includes("test-key"));
   } finally {
     server.close();
