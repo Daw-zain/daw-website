@@ -81,6 +81,7 @@ export const RESOURCES: Record<string, ResourceDef> = {
       { name: "duration", label: lab("Duration (text, e.g. 5 days)", "المدة (نص، مثل 5 أيام)"), type: "text", bilingual: true },
       { name: "hours", label: lab("Training hours", "عدد الساعات"), type: "number", nullable: true },
       { name: "image", label: lab("Cover image", "صورة الغلاف"), type: "image", nullable: true },
+      { name: "paymentUrl", label: lab("Online payment link", "رابط الدفع الإلكتروني"), type: "text", nullable: true, ltr: true, help: lab("Starts with https://. Leave empty to hide the payment button.", "يبدأ بـ https://. اتركه فارغًا لإخفاء زر الدفع.") },
       { name: "featured", label: lab("Featured on home page", "مميز في الصفحة الرئيسية"), type: "checkbox" },
       { name: "published", label: lab("Published", "منشور"), type: "checkbox", default: true },
       { name: "order", label: lab("Display order", "ترتيب العرض"), type: "number", default: 0 },

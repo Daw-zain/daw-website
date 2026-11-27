@@ -64,6 +64,9 @@ export default async function ProgramPage({ params }: Props) {
   const title = pick(p, "title", locale);
   const duration = pick(p, "duration", locale);
   const canRegister = p.status === "OPEN" || p.status === "COMING_SOON";
+  // only a secure web address becomes a payment button
+  const payUrl = p.paymentUrl?.trim().startsWith("https://") ? p.paymentUrl.trim() : null;
+  const payLabel = locale === "ar" ? "ادفع رسوم الدورة" : "Pay the course fee";
   const outline = lines(pick(p, "outline", locale));
   const url = siteUrl(L(`/programs/${p.slug}`));
   const waText = `${locale === "ar" ? settings.whatsappMessageAr : settings.whatsappMessageEn} ${title}`;
@@ -115,6 +118,11 @@ export default async function ProgramPage({ params }: Props) {
           {canRegister && (
             <a href="#register" className="btn btn-gold">
               {p.status === "OPEN" ? t.cta.enroll : t.cta.registerInterest}
+            </a>
+          )}
+          {payUrl && (
+            <a href={payUrl} target="_blank" rel="noopener noreferrer" className="btn btn-gold">
+              {payLabel}
             </a>
           )}
           <Link href={L(`/corporate?program=${p.slug}#request`)} className="btn btn-ghost-light">
@@ -246,6 +254,14 @@ export default async function ProgramPage({ params }: Props) {
                   <a href="#register" className="btn btn-primary">
                     {p.status === "OPEN" ? t.cta.enroll : t.cta.registerInterest}
                   </a>
+                )}
+                {payUrl && (
+                  <>
+                    <a href={payUrl} target="_blank" rel="noopener noreferrer" className="btn btn-gold">
+                      {payLabel}
+                    </a>
+                    <p className="text-center text-xs text-slate">{locale === "ar" ? "الدفع الإلكتروني عبر منصة mypay (يُفتح في صفحة جديدة)" : "Online payment through mypay (opens in a new tab)"}</p>
+                  </>
                 )}
                 <Link href={L(`/corporate?program=${p.slug}#request`)} className="btn btn-outline">
                   {t.cta.corporate}

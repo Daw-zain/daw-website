@@ -76,6 +76,7 @@ model Program {
   durationEn      String    @default("")
   hours           Int?
   image           String?
+  paymentUrl      String? // online payment page of the course (https), shown as a button on its page
   status          String    @default("COMING_SOON") // OPEN | COMING_SOON | ON_REQUEST | CLOSED
   featured        Boolean   @default(false)
   published       Boolean   @default(true)
@@ -526,8 +527,13 @@ model ExamFolder {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   exams       Exam[]
+  // a sub-folder of another folder of the same course (one level); it keeps its parent's kind
+  parentId    String?
+  parent      ExamFolder?  @relation("ExamFolderTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children    ExamFolder[] @relation("ExamFolderTree")
 
   @@index([programId])
+  @@index([parentId])
 }
 
 model ExamAuditLog {
