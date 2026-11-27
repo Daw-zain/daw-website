@@ -32,7 +32,8 @@ function People({ me, kind, locale, labels }: { me: ExamMe; kind: PersonKind; lo
   const mayCreate = can(me, "users", "create") && (trainee || can(me, "trainers", "update"));
   const mayEnroll = trainee && can(me, "trainees", "update");
   const mayExport = can(me, "users", "export");
-  const [filter, setFilter] = useState<Filter>(NONE);
+  // a course page links here with its trainees already filtered (this part only renders in the browser)
+  const [filter, setFilter] = useState<Filter>(() => ({ ...NONE, programId: new URLSearchParams(window.location.search).get("course") ?? "" }));
   const [page, setPage] = useState(1);
   const [data, setData] = useState<PeopleData | null>(null);
   const [courses, setCourses] = useState<AdminCourse[]>([]);

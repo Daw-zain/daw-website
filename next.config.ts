@@ -22,6 +22,8 @@ const serverConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
   images: {
     formats: ["image/avif", "image/webp"],
+    // course covers uploaded from the online dashboard
+    remotePatterns: [{ protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/course-covers/**" }],
   },
   experimental: {
     serverActions: { bodySizeLimit: "12mb" },

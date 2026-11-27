@@ -35,7 +35,7 @@ export type AuditData = { total: number; page: number; pageSize: number; areas: 
 export const roleName = (r: { nameAr: string; nameEn: string }, locale: string) => (locale === "ar" ? r.nameAr || r.nameEn : r.nameEn || r.nameAr);
 
 /** the order sections are listed in (the database stores them unordered) */
-export const SECTION_ORDER = ["users", "trainers", "trainees", "question_bank", "exams", "results", "audit", "settings"];
+export const SECTION_ORDER = ["courses", "users", "trainers", "trainees", "question_bank", "exams", "results", "audit", "settings"];
 export const orderedSections = (c: Catalogue) => Object.keys(c).sort((a, b) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b));
 
 /** "Admin — Results follower"; just the base label when the role carries the same name */

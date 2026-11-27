@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { courseTitle, ExamError, rpc, useExamSession, type CoursePeople, type ExamFolder, type FolderKind } from "@/lib/exams/client";
+import { CourseTabs } from "@/components/courses/CourseTabs";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 
 const ICONS: Record<FolderKind, string> = {
@@ -15,7 +16,7 @@ const ICONS: Record<FolderKind, string> = {
   CUSTOM: "M3 7h6l2 2h10v10H3z",
 };
 
-/** /[locale]/exams/course?id=… — the course folders the caller may open (learners never see the question bank) */
+/** /[locale]/exams/course?id=… — the course's files, videos and tests (learners never see the question bank) */
 export function ExamCourse(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
   return (
     <Suspense fallback={<Spinner />}>
@@ -41,7 +42,18 @@ function CourseInner({ locale, labels, homeLabel }: { locale: string; labels: Ex
     >
       {() =>
         course ? (
-          <Folders locale={locale} labels={labels} programId={course.programId} canSeePeople={course.access === "ADMIN" || !!course.permissions?.canViewResults} />
+          <div className="space-y-6">
+            <Link href={`/${locale}/exams`} className="inline-block text-sm font-semibold text-brand hover:underline">
+              {locale === "ar" ? "→" : "←"} {labels.course.back}
+            </Link>
+            <CourseTabs
+              key={course.programId}
+              programId={course.programId}
+              locale={locale}
+              labels={labels}
+              tests={<CourseFolders locale={locale} labels={labels} programId={course.programId} canSeePeople={course.access === "ADMIN" || !!course.permissions?.canViewResults} />}
+            />
+          </div>
         ) : (
           <Notice tone="error">
             <p>{labels.course.notFound}</p>
@@ -55,7 +67,8 @@ function CourseInner({ locale, labels, homeLabel }: { locale: string; labels: Ex
   );
 }
 
-function Folders({ locale, labels, programId, canSeePeople }: { locale: string; labels: ExamLabels; programId: string; canSeePeople: boolean }) {
+/** the tests section: the exam platform's folders of one course */
+export function CourseFolders({ locale, labels, programId, canSeePeople }: { locale: string; labels: ExamLabels; programId: string; canSeePeople: boolean }) {
   const [folders, setFolders] = useState<ExamFolder[] | null>(null);
   const [people, setPeople] = useState<CoursePeople | null>(null);
   const [error, setError] = useState(false);
@@ -83,12 +96,7 @@ function Folders({ locale, labels, programId, canSeePeople }: { locale: string; 
   return (
     <div className="space-y-12">
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-bold">{labels.course.folders}</h2>
-          <Link href={`/${locale}/exams`} className="text-sm font-semibold text-brand hover:underline">
-            {ar ? "→" : "←"} {labels.course.back}
-          </Link>
-        </div>
+        <h2 className="text-2xl font-bold">{labels.course.folders}</h2>
         <ul className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {folders.map((f) => (
             <li key={f.id} className="card flex h-full flex-col p-6">

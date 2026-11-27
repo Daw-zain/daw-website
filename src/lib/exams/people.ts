@@ -53,6 +53,8 @@ export type MemberRecord = {
     titleEn: string;
     since: string;
     progress: { tests: number; taken: number; passed: number; attempts: number; avgPercent: number | null; mistakes: number } | null;
+    /** files and videos of the course the trainee has completed */
+    content: { total: number; done: number; percent: number; lastAt: string | null };
   })[];
   instructing: (Permissions & { programId: string; code: string | null; titleAr: string; titleEn: string })[];
   attempts: { id: string; examId: string; titleAr: string; titleEn: string; code: string | null; attemptNo: number; status: string; startedAt: string; submittedAt: string | null; percent: number | null; passed: boolean | null; warnings: number }[];

@@ -96,6 +96,9 @@ model Program {
   scenarios       Scenario[]
   examAssets      ExamAsset[]
   exams           Exam[]
+  // courses: files and videos
+  courseFolders   CourseFolder[]
+  courseItems     CourseItem[]
 }
 
 model CourseSession {
@@ -390,6 +393,7 @@ model ExamMember {
   deletedAt      DateTime? // personal data removed; results are kept
   profile        MemberProfile?
   qualifications MemberQualification[]
+  contentProgress ContentProgress[]
 }
 
 // ───────────── LMS-2: personal and professional profile ─────────────
@@ -469,6 +473,7 @@ model CourseInstructor {
   canViewResults        Boolean    @default(true)
   canReviewEssays       Boolean    @default(true)
   canReopenAttempts     Boolean    @default(false)
+  canManageContent      Boolean    @default(true) // course files and videos
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @default(now()) @updatedAt
 
@@ -955,4 +960,91 @@ model MistakeSessionQuestion {
   answeredAt DateTime?
 
   @@unique([sessionId, position])
+}
+
+// Course management: files and videos of each course (functions in supabase/lms-courses.sql)
+model CourseFolder {
+  id        String       @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId String
+  program   Program      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  section   String // MATERIAL | VIDEO
+  nameAr    String
+  nameEn    String       @default("")
+  sortOrder Int          @default(0)
+  published Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @default(now()) @updatedAt
+  items     CourseItem[]
+
+  @@index([programId, section])
+}
+
+model CourseItem {
+  id            String              @id @default(dbgenerated("gen_random_uuid()::text"))
+  programId     String
+  program       Program             @relation(fields: [programId], references: [id], onDelete: Cascade)
+  section       String // MATERIAL | VIDEO
+  folderId      String?
+  folder        CourseFolder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  titleAr       String
+  titleEn       String              @default("")
+  descAr        String              @default("")
+  descEn        String              @default("")
+  sortOrder     Int                 @default(0)
+  published     Boolean             @default(true)
+  allowDownload Boolean             @default(true) // false = view in the page only
+  sharedWith    String[]            @default([]) // other course ids whose trainees may also see it
+  source        String              @default("FILE") // FILE | YOUTUBE | VIMEO | LINK
+  url           String              @default("") // external link
+  videoRef      String              @default("") // YouTube / Vimeo video id
+  filePath      String? // private bucket "course-files"
+  fileName      String              @default("")
+  mimeType      String              @default("")
+  size          Int                 @default(0)
+  version       Int                 @default(1)
+  createdById   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @default(now()) @updatedAt
+  versions      CourseItemVersion[]
+  progress      ContentProgress[]
+
+  @@index([programId, section])
+  @@index([filePath])
+}
+
+// earlier versions of a replaced file
+model CourseItemVersion {
+  id           String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  itemId       String
+  item         CourseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  version      Int
+  filePath     String
+  fileName     String     @default("")
+  mimeType     String     @default("")
+  size         Int        @default(0)
+  replacedById String?
+  replacedAt   DateTime   @default(now())
+
+  @@index([itemId])
+}
+
+// what a trainee opened or watched
+model ContentProgress {
+  id          String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  itemId      String
+  item        CourseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  memberId    String
+  member      ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  opens       Int        @default(0)
+  ranges      Json       @default("[]") // watched parts of a video, seconds: [[from, to], …]
+  watchedSec  Int        @default(0)
+  durationSec Int?
+  percent     Int        @default(0)
+  positionSec Int        @default(0)
+  firstAt     DateTime   @default(now())
+  lastAt      DateTime   @default(now())
+  completedAt DateTime?
+
+  @@unique([itemId, memberId])
+  @@index([memberId])
 }

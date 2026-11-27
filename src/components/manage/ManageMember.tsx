@@ -114,8 +114,8 @@ function Member({ id, me, locale, labels }: { id: string; me: ExamMe; locale: st
       {
         name: t.tabs.courses,
         rows: [
-          [a.course, c.status, t.subscriptions.startsAt, c.validUntil, t.results.tests, t.results.taken, t.results.passed, c.attempts, t.results.average, t.results.mistakes],
-          ...rec.enrollments.map((e) => [e.code, subLabel(subState(e), labels), fromUtcDay(e.startsAt), untilDay(e.expiresAt), e.progress?.tests ?? "", e.progress?.taken ?? "", e.progress?.passed ?? "", e.progress?.attempts ?? "", e.progress?.avgPercent ?? "", e.progress?.mistakes ?? ""]),
+          [a.course, c.status, t.subscriptions.startsAt, c.validUntil, t.results.tests, t.results.taken, t.results.passed, c.attempts, t.results.average, t.results.mistakes, labels.content.myMemberHeader],
+          ...rec.enrollments.map((e) => [e.code, subLabel(subState(e), labels), fromUtcDay(e.startsAt), untilDay(e.expiresAt), e.progress?.tests ?? "", e.progress?.taken ?? "", e.progress?.passed ?? "", e.progress?.attempts ?? "", e.progress?.avgPercent ?? "", e.progress?.mistakes ?? "", e.content?.total ? `${e.content.done}/${e.content.total}` : ""]),
         ],
       },
       {
@@ -341,6 +341,11 @@ function CoursesTab({ me, rec, courses, busy, run, locale, labels }: { me: ExamM
                 <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-mist" role="img" aria-label={`${e.progress.passed}/${e.progress.tests}`}>
                   <div className="h-full rounded-full bg-brand" style={{ width: `${(100 * e.progress.passed) / e.progress.tests}%` }} />
                 </div>
+              )}
+              {e.content?.total > 0 && (
+                <p className="mt-2 text-sm text-slate">
+                  {labels.content.memberProgress.replace("{done}", String(e.content.done)).replace("{total}", String(e.content.total)).replace("{p}", String(e.content.percent))}
+                </p>
               )}
               {rec.can.enroll && <SubscriptionForm key={`${e.status}-${e.startsAt}-${e.expiresAt}`} e={e} busy={busy} onSave={(d) => set(e.programId, d)} labels={labels} />}
               {!rec.can.enroll && (

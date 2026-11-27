@@ -187,6 +187,8 @@ begin
     'enrollments', (select coalesce(jsonb_agg(jsonb_build_object(
         'programId', e."programId", 'code', g."code", 'titleAr', g."titleAr", 'titleEn', g."titleEn", 'status', e."status",
         'startsAt', e."startsAt", 'expiresAt', e."expiresAt", 'open', public.exam_enrollment_open(e), 'since', e."createdAt",
+        -- files and videos completed (supabase/lms-courses.sql)
+        'content', public.lms_content_progress(t."id", e."programId"),
         -- progress in the course's published tests (null when the caller may not view its results)
         'progress', case when e."programId" = any(v_courses) then (
           select jsonb_build_object(

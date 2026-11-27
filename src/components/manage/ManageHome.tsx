@@ -42,7 +42,7 @@ function Home({ me, locale, labels }: { me: ExamMe; locale: string; labels: Exam
   }, [seesLog]);
 
   const cards: { key: keyof typeof m.cards; href: string }[] = [
-    ...(["trainees", "trainers", "users", "roles", "audit", "settings"] as const).filter((s: ManageSection) => allowed(me, s)).map((s) => ({ key: s as keyof typeof m.cards, href: `/${locale}/manage/${s}` })),
+    ...(["courses", "trainees", "trainers", "users", "roles", "audit", "settings"] as const).filter((s: ManageSection) => allowed(me, s)).map((s) => ({ key: s as keyof typeof m.cards, href: `/${locale}/manage/${s}` })),
     ...(me.courses.length ? [{ key: "exams" as const, href: `/${locale}/exams` }] : []),
   ];
 

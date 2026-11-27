@@ -32,6 +32,7 @@ export const PERMISSION_KEYS = [
   "canViewResults",
   "canReviewEssays",
   "canReopenAttempts",
+  "canManageContent",
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export type Permissions = Record<PermissionKey, boolean>;
@@ -51,6 +52,7 @@ export const DEFAULT_PERMISSIONS: Permissions = {
   canViewResults: true,
   canReviewEssays: true,
   canReopenAttempts: false,
+  canManageContent: true,
 };
 
 export type ExamCourse = {
@@ -99,6 +101,8 @@ const KNOWN_ERRORS = [
   "cannot_grant",
   "account_conflict",
   "not_found",
+  "invalid_course",
+  "invalid_content",
 ] as const;
 export type ExamErrorCode = (typeof KNOWN_ERRORS)[number] | "network" | "unknown";
 

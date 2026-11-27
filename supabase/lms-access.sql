@@ -48,6 +48,7 @@ begin
   if want && array['users.create', 'users.update', 'users.export', 'trainers.update', 'trainees.update'] then want := want || 'users.read'::text; end if;
   if 'results.update' = any(want) then want := want || 'results.read'::text; end if;
   if 'audit.export' = any(want) then want := want || 'audit.read'::text; end if;
+  if want && array['courses.create', 'courses.update', 'courses.content'] then want := want || 'courses.read'::text; end if;
   -- tests and results show the questions, so they include viewing the question banks
   if exists (select 1 from unnest(want) w where w like 'question\_bank.%' or w like 'exams.%' or w like 'results.%') then
     want := want || 'question_bank.read'::text;
@@ -74,7 +75,7 @@ begin
       'programId', p."id", 'code', p."code", 'titleAr', p."titleAr", 'titleEn', p."titleEn",
       'mine', (select jsonb_object_agg(k, public.exam_instructor_can(p."id", k)) from unnest(array[
         'canEditQuestions', 'canDeleteQuestions', 'canManageCategories', 'canManageScenarios', 'canImport', 'canExport', 'canCreateExams',
-        'canPublishExams', 'canManageDomainTests', 'canManageSimulations', 'canViewResults', 'canReviewEssays', 'canReopenAttempts']) k)
+        'canPublishExams', 'canManageDomainTests', 'canManageSimulations', 'canViewResults', 'canReviewEssays', 'canReopenAttempts', 'canManageContent']) k)
     ) order by p."order", p."code"), '[]'::jsonb)
     from public."Program" p);
 end $$;

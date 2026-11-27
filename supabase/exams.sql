@@ -95,7 +95,8 @@ as $$
     "exams": ["manage", "publish"],
     "results": ["read", "update"],
     "audit": ["read", "export"],
-    "settings": ["update"]
+    "settings": ["update"],
+    "courses": ["read", "create", "update", "content"]
   }'::jsonb
 $$;
 
@@ -153,6 +154,7 @@ as $$
     when 'canViewResults' then public.exam_can('results', 'read')
     when 'canReviewEssays' then public.exam_can('results', 'update')
     when 'canReopenAttempts' then public.exam_can('results', 'update')
+    when 'canManageContent' then public.exam_can('courses', 'content')
   end, false)
 $$;
 
@@ -288,7 +290,7 @@ begin
       'permissions', case when me."role" <> 'ADMIN' and (ci."id" is not null or v_staff) then (
         select jsonb_object_agg(k, public.exam_instructor_can(p."id", k)) from unnest(array[
           'canEditQuestions', 'canDeleteQuestions', 'canManageCategories', 'canManageScenarios', 'canImport', 'canExport', 'canCreateExams',
-          'canPublishExams', 'canManageDomainTests', 'canManageSimulations', 'canViewResults', 'canReviewEssays', 'canReopenAttempts']) k) end
+          'canPublishExams', 'canManageDomainTests', 'canManageSimulations', 'canViewResults', 'canReviewEssays', 'canReopenAttempts', 'canManageContent']) k) end
     ) as c
     from public."Program" p
     left join public."CourseInstructor" ci on ci."programId" = p."id" and ci."memberId" = me."id" and me."role" <> 'LEARNER'
@@ -465,6 +467,7 @@ begin
     "canViewResults"       = coalesce((p_perms ->> 'canViewResults')::boolean,       c."canViewResults"),
     "canReviewEssays"      = coalesce((p_perms ->> 'canReviewEssays')::boolean,      c."canReviewEssays"),
     "canReopenAttempts"    = coalesce((p_perms ->> 'canReopenAttempts')::boolean,    c."canReopenAttempts"),
+    "canManageContent"     = coalesce((p_perms ->> 'canManageContent')::boolean,     c."canManageContent"),
     "updatedAt" = now()
   where c."id" = ci."id"
   returning * into ci;
