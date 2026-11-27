@@ -18,8 +18,12 @@ insert into public."AdminRole" ("key", "nameAr", "nameEn", "descAr", "descEn", "
   'إدارة المستخدمين والمدربين والمتدربين والاختبارات ومتابعة النتائج، دون حذف الأسئلة أو تصديرها.',
   'Manages users, trainers, trainees and tests and follows results, without deleting or exporting questions.',
   true,
-  '{"users": ["read", "update"], "trainers": ["update"], "trainees": ["update"], "question_bank": ["read", "update", "import"], "exams": ["manage", "publish"], "results": ["read", "update"], "audit": ["read"]}'::jsonb
+  '{"users": ["read", "create", "update"], "trainers": ["update"], "trainees": ["update"], "question_bank": ["read", "update", "import"], "exams": ["manage", "publish"], "results": ["read", "update"], "audit": ["read"]}'::jsonb
 ) on conflict ("key") do nothing;
+
+-- LMS-2: the built-in role may create accounts, unless the super admin has already edited it
+update public."AdminRole" set "permissions" = jsonb_set("permissions", '{users}', '["read", "create", "update"]'::jsonb)
+where "key" = 'admin' and "updatedAt" = "createdAt" and not coalesce(("permissions" -> 'users') ? 'create', false);
 
 -- keep only known permissions and add the ones they depend on; unknown input is refused
 create or replace function public.lms_normalize_permissions(p jsonb)
@@ -41,7 +45,7 @@ begin
     end loop;
   end loop;
   -- managing people needs the member list
-  if want && array['users.update', 'trainers.update', 'trainees.update'] then want := want || 'users.read'::text; end if;
+  if want && array['users.create', 'users.update', 'users.export', 'trainers.update', 'trainees.update'] then want := want || 'users.read'::text; end if;
   if 'results.update' = any(want) then want := want || 'results.read'::text; end if;
   if 'audit.export' = any(want) then want := want || 'audit.read'::text; end if;
   -- tests and results show the questions, so they include viewing the question banks

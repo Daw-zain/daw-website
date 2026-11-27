@@ -88,7 +88,7 @@ immutable
 set search_path = public
 as $$
   select '{
-    "users": ["read", "update"],
+    "users": ["read", "create", "update", "export"],
     "trainers": ["update"],
     "trainees": ["update"],
     "question_bank": ["read", "update", "import", "delete", "export"],
@@ -156,6 +156,18 @@ as $$
   end, false)
 $$;
 
+-- LMS-2: does this subscription open the course right now? (timestamps are stored in UTC)
+create or replace function public.exam_enrollment_open(e public."Enrollment")
+returns boolean
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(e."status" = 'ACTIVE'
+    and (e."startsAt" is null or e."startsAt" <= (now() at time zone 'utc'))
+    and (e."expiresAt" is null or e."expiresAt" > (now() at time zone 'utc')), false)
+$$;
+
 -- 'ADMIN' | 'INSTRUCTOR' | 'LEARNER' | null — the caller's relation to one course
 create or replace function public.exam_course_access(p_program text)
 returns text
@@ -175,7 +187,7 @@ begin
   end if;
   -- an admin whose role includes the question banks works in every course like its staff
   if public.exam_can('question_bank', 'read') then return 'INSTRUCTOR'; end if;
-  if exists (select 1 from public."Enrollment" e where e."programId" = p_program and e."memberId" = me."id" and e."status" = 'ACTIVE') then
+  if exists (select 1 from public."Enrollment" e where e."programId" = p_program and e."memberId" = me."id" and public.exam_enrollment_open(e)) then
     return 'LEARNER';
   end if;
   return null;
@@ -248,15 +260,15 @@ begin
 
   select * into me from public."ExamMember" where "authUserId" = v_sub;
   if me."id" is null then
-    -- same verified e-mail re-created in Supabase Auth → re-link instead of duplicating
-    update public."ExamMember" set "authUserId" = v_sub, "updatedAt" = now()
-      where "email" = v_email returning * into me;
-    if me."id" is null then
-      insert into public."ExamMember" ("authUserId", "email", "name")
-      values (v_sub, v_email, coalesce(nullif(current_setting('request.jwt.claims', true)::jsonb #>> '{user_metadata,name}', ''), split_part(v_email, '@', 1)))
-      returning * into me;
+    -- LMS-2: a different sign-in never takes over an existing record just by using its e-mail (anyone can
+    -- register an address while e-mail confirmation is off). An administrator links it with "password link".
+    if exists (select 1 from public."ExamMember" where "email" = v_email) then
+      raise exception 'account_conflict' using errcode = '42501';
     end if;
-  elsif me."email" <> v_email then
+    insert into public."ExamMember" ("authUserId", "email", "name")
+    values (v_sub, v_email, coalesce(nullif(current_setting('request.jwt.claims', true)::jsonb #>> '{user_metadata,name}', ''), split_part(v_email, '@', 1)))
+    returning * into me;
+  elsif me."email" <> v_email and me."deletedAt" is null and not exists (select 1 from public."ExamMember" where "email" = v_email) then
     update public."ExamMember" set "email" = v_email, "updatedAt" = now() where "id" = me."id" returning * into me;
   end if;
 
@@ -280,7 +292,7 @@ begin
     ) as c
     from public."Program" p
     left join public."CourseInstructor" ci on ci."programId" = p."id" and ci."memberId" = me."id" and me."role" <> 'LEARNER'
-    left join public."Enrollment" e on e."programId" = p."id" and e."memberId" = me."id" and e."status" = 'ACTIVE'
+    left join public."Enrollment" e on e."programId" = p."id" and e."memberId" = me."id" and public.exam_enrollment_open(e)
     where me."role" = 'ADMIN' or v_staff or ci."id" is not null or e."id" is not null
   ) s;
 
@@ -343,11 +355,11 @@ begin
       'adminRole', (select jsonb_build_object('nameAr', r."nameAr", 'nameEn', r."nameEn", 'active', r."active") from public."AdminRole" r where r."id" = m."adminRoleId"),
       'instructing', (select coalesce(jsonb_agg(to_jsonb(ci) - 'id' - 'memberId' - 'createdAt' - 'updatedAt'), '[]'::jsonb)
                       from public."CourseInstructor" ci where ci."memberId" = m."id"),
-      'enrollments', (select coalesce(jsonb_agg(jsonb_build_object('programId', e."programId", 'status', e."status", 'since', e."createdAt")), '[]'::jsonb)
+      'enrollments', (select coalesce(jsonb_agg(jsonb_build_object('programId', e."programId", 'status', e."status", 'since', e."createdAt", 'startsAt', e."startsAt", 'expiresAt', e."expiresAt", 'open', public.exam_enrollment_open(e))), '[]'::jsonb)
                       from public."Enrollment" e where e."memberId" = m."id")
     ) order by m."createdAt" desc), '[]'::jsonb)
     from public."ExamMember" m
-    where coalesce(p_search, '') = '' or m."email" ilike '%' || p_search || '%' or m."name" ilike '%' || p_search || '%'
+    where m."deletedAt" is null and (coalesce(p_search, '') = '' or m."email" ilike '%' || p_search || '%' or m."name" ilike '%' || p_search || '%')
   );
 end $$;
 
@@ -363,7 +375,7 @@ begin
   if p_role is null or p_role not in ('ADMIN', 'STAFF', 'INSTRUCTOR', 'LEARNER') then
     raise exception 'invalid_role' using errcode = '22023';
   end if;
-  select * into target from public."ExamMember" where "email" = lower(trim(p_email));
+  select * into target from public."ExamMember" where "email" = lower(trim(p_email)) and "deletedAt" is null;
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
@@ -395,7 +407,7 @@ as $$
 declare me public."ExamMember" := public.exam_require('users', 'update'); target public."ExamMember";
 begin
   if p_active is null then raise exception 'invalid_status' using errcode = '22023'; end if;
-  select * into target from public."ExamMember" where "email" = lower(trim(p_email));
+  select * into target from public."ExamMember" where "email" = lower(trim(p_email)) and "deletedAt" is null;
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
@@ -422,7 +434,7 @@ begin
   if not exists (select 1 from public."Program" where "id" = p_program) then
     raise exception 'course_not_found' using errcode = 'P0002';
   end if;
-  select * into target from public."ExamMember" where "email" = lower(trim(p_email));
+  select * into target from public."ExamMember" where "email" = lower(trim(p_email)) and "deletedAt" is null;
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
@@ -499,13 +511,13 @@ set search_path = public
 as $$
 declare me public."ExamMember" := public.exam_require('trainees', 'update'); target public."ExamMember"; en public."Enrollment";
 begin
-  if p_status not in ('ACTIVE', 'SUSPENDED', 'COMPLETED') then
+  if p_status is null or p_status not in ('ACTIVE', 'SUSPENDED', 'COMPLETED', 'CANCELLED') then
     raise exception 'invalid_status' using errcode = '22023';
   end if;
   if not exists (select 1 from public."Program" where "id" = p_program) then
     raise exception 'course_not_found' using errcode = 'P0002';
   end if;
-  select * into target from public."ExamMember" where "email" = lower(trim(p_email));
+  select * into target from public."ExamMember" where "email" = lower(trim(p_email)) and "deletedAt" is null;
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
@@ -533,7 +545,7 @@ begin
   return jsonb_build_object(
     'instructors', (select coalesce(jsonb_agg(jsonb_build_object('email', m."email", 'name', m."name") order by m."name"), '[]'::jsonb)
                     from public."CourseInstructor" ci join public."ExamMember" m on m."id" = ci."memberId" where ci."programId" = p_program and m."role" <> 'LEARNER'),
-    'learners', (select coalesce(jsonb_agg(jsonb_build_object('email', m."email", 'name', m."name", 'status', e."status", 'since', e."createdAt") order by m."name"), '[]'::jsonb)
+    'learners', (select coalesce(jsonb_agg(jsonb_build_object('email', m."email", 'name', m."name", 'status', e."status", 'since', e."createdAt", 'expiresAt', e."expiresAt", 'open', public.exam_enrollment_open(e)) order by m."name"), '[]'::jsonb)
                  from public."Enrollment" e join public."ExamMember" m on m."id" = e."memberId" where e."programId" = p_program)
   );
 end $$;
@@ -542,7 +554,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['ExamMember', 'CourseInstructor', 'Enrollment', 'ExamFolder', 'ExamAuditLog', 'AdminRole'] loop
+  foreach t in array array['ExamMember', 'CourseInstructor', 'Enrollment', 'ExamFolder', 'ExamAuditLog', 'AdminRole', 'MemberProfile', 'MemberQualification'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
   end loop;
@@ -560,6 +572,7 @@ revoke all on function public.lms_permission_catalogue() from public, anon, auth
 revoke all on function public.exam_can(text, text) from public, anon, authenticated;
 revoke all on function public.exam_require(text, text) from public, anon, authenticated;
 revoke all on function public.exam_staff_course_perm(text) from public, anon, authenticated;
+revoke all on function public.exam_enrollment_open(public."Enrollment") from public, anon, authenticated;
 
 revoke all on function public.exam_me() from public, anon;
 revoke all on function public.exam_course_folders(text) from public, anon;

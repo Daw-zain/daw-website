@@ -83,7 +83,7 @@ export function ExamShell({
           )}
           {state.status === "error" && (
             <Notice tone="error">
-              <p>{state.code === "account_disabled" ? labels.disabled : labels.errorGeneric}</p>
+              <p>{state.code === "account_disabled" ? labels.disabled : state.code === "account_conflict" ? labels.conflict : labels.errorGeneric}</p>
               {state.code !== "account_disabled" && (
                 <button type="button" onClick={reload} className="btn btn-outline btn-sm mt-3">
                   {labels.retry}

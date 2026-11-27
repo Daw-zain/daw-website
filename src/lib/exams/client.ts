@@ -16,7 +16,7 @@ export type Platform = Record<string, string[]>;
 export const can = (me: { platform?: Platform }, section: string, action: string) => !!me.platform?.[section]?.includes(action);
 export const isPlatformAdmin = (me: { platform?: Platform }) => Object.keys(me.platform ?? {}).length > 0;
 export type FolderKind = "QUESTION_BANK" | "DOMAIN_TESTS" | "EXAM_SIMULATIONS" | "MISTAKES_QUIZ" | "RESULTS" | "CUSTOM";
-export type EnrollmentStatus = "ACTIVE" | "SUSPENDED" | "COMPLETED";
+export type EnrollmentStatus = "ACTIVE" | "SUSPENDED" | "COMPLETED" | "CANCELLED";
 
 export const PERMISSION_KEYS = [
   "canEditQuestions",
@@ -80,7 +80,7 @@ export type ExamMemberRow = {
   adminRoleId: string | null;
   adminRole: { nameAr: string; nameEn: string; active: boolean } | null;
   instructing: ({ programId: string } & Permissions)[];
-  enrollments: { programId: string; status: EnrollmentStatus; since: string }[];
+  enrollments: { programId: string; status: EnrollmentStatus; since: string; startsAt: string | null; expiresAt: string | null; open: boolean }[];
 };
 
 /** Error codes raised by the exam_* functions (see supabase/exams.sql) */
@@ -97,6 +97,7 @@ const KNOWN_ERRORS = [
   "super_admin_only",
   "invalid_admin_role",
   "cannot_grant",
+  "account_conflict",
   "not_found",
 ] as const;
 export type ExamErrorCode = (typeof KNOWN_ERRORS)[number] | "network" | "unknown";

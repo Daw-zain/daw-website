@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { can, courseTitle, ExamError, PERMISSION_KEYS, DEFAULT_PERMISSIONS, rpc, type EnrollmentStatus, type ExamMe, type ExamMemberRow, type Permissions, type Role } from "@/lib/exams/client";
+import Link from "next/link";
+import { can, courseTitle, ExamError, rpc, type EnrollmentStatus, type ExamMe, type ExamMemberRow, type Role } from "@/lib/exams/client";
 import { roleName, staffLabel, type AdminCourse, type RolesData } from "@/lib/exams/manage";
 import { cn } from "@/lib/utils";
 import { Notice, Spinner, type ExamLabels } from "@/components/exams/ExamShell";
 import { ManageShell, SectionTitle } from "./ManageShell";
+import { TrainerCourses } from "./TrainerCourses";
 
 const ROLES: Role[] = ["LEARNER", "INSTRUCTOR", "STAFF", "ADMIN"];
 type Flash = { tone: "success" | "error"; text: string } | null;
@@ -98,12 +100,13 @@ function Users({ me, reloadMe, locale, labels }: { me: ExamMe; reloadMe: () => v
                 <div className="text-sm">
                   <span className="block text-xs text-slate">{a.enrolledIn}</span>
                   <span className="font-semibold text-navy" dir="ltr">
-                    {m.enrollments.map((e) => `${code(e.programId)}${e.status === "ACTIVE" ? "" : ` (${a.enrollmentStatus[e.status]})`}`).join(", ") || a.none}
+                    {m.enrollments.map((e) => `${code(e.programId)}${e.open ? "" : ` (${e.status === "ACTIVE" ? a.enrollmentStatus.EXPIRED : a.enrollmentStatus[e.status]})`}`).join(", ") || a.none}
                   </span>
                 </div>
                 <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", m.active ? "bg-emerald-50 text-emerald-700" : "bg-gold/10 text-gold-600")}>
                   {m.active ? a.active : a.disabled}
                 </span>
+                <Link href={`/${locale}/manage/member?id=${encodeURIComponent(m.id)}`} className="text-sm font-semibold text-brand hover:underline">{labels.manage.people.open}</Link>
                 {(can(me, "users", "update") || can(me, "trainers", "update") || can(me, "trainees", "update")) && (
                   <button type="button" onClick={() => setOpen(open === m.id ? null : m.id)} className="btn btn-outline btn-sm" aria-expanded={open === m.id}>
                     {open === m.id ? a.close : a.manage}
@@ -155,8 +158,6 @@ function MemberPanel({
   const [busy, setBusy] = useState(false);
   const [role, setRole] = useState<Role>(member.role);
   const [adminRole, setAdminRole] = useState(member.adminRoleId ?? "");
-  const [instrCourse, setInstrCourse] = useState("");
-  const [perms, setPerms] = useState<Permissions>(DEFAULT_PERMISSIONS);
   const [enrCourse, setEnrCourse] = useState("");
   const [enrStatus, setEnrStatus] = useState<EnrollmentStatus>("ACTIVE");
 
@@ -168,19 +169,6 @@ function MemberPanel({
   const roleOptions: Role[] = isSuper ? ROLES : ["LEARNER", "INSTRUCTOR"];
   const usableRoles = roles.filter((r) => r.active);
 
-  const existing = member.instructing.find((i) => i.programId === instrCourse);
-  const mine = courses.find((c) => c.programId === instrCourse)?.mine;
-  // a permission can be switched on only by someone who holds it (or if it is on already)
-  const mayGrant = (k: keyof Permissions) => isSuper || !!mine?.[k] || !!existing?.[k];
-
-  useEffect(() => {
-    if (!instrCourse) return;
-    const found = member.instructing.find((i) => i.programId === instrCourse);
-    const held = courses.find((c) => c.programId === instrCourse)?.mine;
-    setPerms(
-      Object.fromEntries(PERMISSION_KEYS.map((k) => [k, found ? !!found[k] : DEFAULT_PERMISSIONS[k] && (isSuper || !!held?.[k])])) as Permissions,
-    );
-  }, [instrCourse, member.instructing, courses, isSuper]);
   useEffect(() => {
     setEnrStatus(member.enrollments.find((e) => e.programId === enrCourse)?.status ?? "ACTIVE");
   }, [enrCourse, member.enrollments]);
@@ -258,45 +246,7 @@ function MemberPanel({
       )}
 
       {can(me, "trainers", "update") && !protectedTarget && (
-        <fieldset className="rounded-xl border border-line bg-white p-4">
-          <legend className="px-1 text-sm font-bold text-navy">{a.assignInstructor}</legend>
-          {member.role === "LEARNER" && member.instructing.length > 0 && <p className="mb-3 text-sm text-gold-600">{u.traineeNote}</p>}
-          <label className="block text-sm">
-            <span className="sr-only">{a.course}</span>
-            <select value={instrCourse} onChange={(e) => setInstrCourse(e.target.value)} className="field w-full max-w-md" disabled={busy}>
-              {courseOptions}
-            </select>
-          </label>
-          {instrCourse && (
-            <>
-              <p className="mt-4 text-sm font-semibold text-navy">{a.permissions}</p>
-              {!isSuper && <p className="text-xs text-slate">{u.trainerHint}</p>}
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {PERMISSION_KEYS.map((k) => (
-                  <label key={k} className={cn("flex items-center gap-2 text-sm text-ink", !mayGrant(k) && "opacity-50")}>
-                    <input type="checkbox" checked={perms[k]} onChange={(e) => setPerms({ ...perms, [k]: e.target.checked })} disabled={busy || !mayGrant(k)} className="h-4 w-4 accent-[var(--color-brand)]" />
-                    {a.perms[k]}
-                  </label>
-                ))}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => rpc("exam_admin_assign_instructor", { p_program: instrCourse, p_email: member.email, p_perms: perms }))}>
-                  {existing ? a.updatePermissions : a.assignInstructor}
-                </button>
-                {existing && (
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    disabled={busy}
-                    onClick={() => window.confirm(a.confirmRemove) && run(() => rpc("exam_admin_remove_instructor", { p_program: instrCourse, p_email: member.email }))}
-                  >
-                    {a.removeInstructor}
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </fieldset>
+        <TrainerCourses me={me} email={member.email} instructing={member.instructing} courses={courses} paused={member.role === "LEARNER"} locale={locale} labels={labels} busy={busy} run={run} />
       )}
 
       {can(me, "trainees", "update") && (
@@ -312,7 +262,7 @@ function MemberPanel({
             <label className="text-sm">
               <span className="sr-only">{a.enrollmentStatus.ACTIVE}</span>
               <select value={enrStatus} onChange={(e) => setEnrStatus(e.target.value as EnrollmentStatus)} className="field w-auto" disabled={busy || !enrCourse}>
-                {(["ACTIVE", "SUSPENDED", "COMPLETED"] as EnrollmentStatus[]).map((s) => <option key={s} value={s}>{a.enrollmentStatus[s]}</option>)}
+                {(["ACTIVE", "SUSPENDED", "COMPLETED", "CANCELLED"] as EnrollmentStatus[]).map((s) => <option key={s} value={s}>{a.enrollmentStatus[s]}</option>)}
               </select>
             </label>
             <button type="button" className="btn btn-primary btn-sm" disabled={busy || !enrCourse} onClick={() => run(() => rpc("exam_admin_enroll", { p_program: enrCourse, p_email: member.email, p_status: enrStatus }))}>

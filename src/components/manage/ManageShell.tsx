@@ -9,10 +9,12 @@ import { cn } from "@/lib/utils";
 import { Notice, Spinner, type ExamLabels } from "@/components/exams/ExamShell";
 import { staffLabel } from "@/lib/exams/manage";
 
-export type ManageSection = "home" | "users" | "roles" | "audit" | "settings";
+export type ManageSection = "home" | "trainees" | "trainers" | "users" | "roles" | "audit" | "settings";
 
 const ICONS: Record<ManageSection | "exams" | "site", string> = {
   home: "M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10",
+  trainees: "M12 4 2 9l10 5 10-5-10-5zM6 11.5V17c0 1.5 3 3 6 3s6-1.5 6-3v-5.500M22 9v6",
+  trainers: "M4 5h16v10H4zM12 15v5M8 20h8M8 9h8",
   users: "M16 19c0-2.8-2.7-5-6-5s-6 2.2-6 5M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM17 4.5a4 4 0 0 1 0 7M20 19c0-2-1.2-3.700-3-4.500",
   roles: "M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.500-7-10V6l7-3zM9 12l2 2 4-4",
   audit: "M7 4h10a2 2 0 0 1 2 2v14H5V6a2 2 0 0 1 2-2zM8 9h8M8 13h8M8 17h5",
@@ -30,7 +32,7 @@ const Icon = ({ name }: { name: keyof typeof ICONS }) => (
 /** which sections a member may open (the database enforces the same rules) */
 export function allowed(me: ExamMe, section: ManageSection): boolean {
   if (section === "home") return isPlatformAdmin(me);
-  if (section === "users" || section === "roles") return can(me, "users", "read");
+  if (section === "trainees" || section === "trainers" || section === "users" || section === "roles") return can(me, "users", "read");
   if (section === "audit") return can(me, "audit", "read");
   return can(me, "settings", "update");
 }
@@ -58,7 +60,7 @@ export function ManageShell({
     return (
       <div className="container-x py-14">
         <Notice tone={state.status === "server" ? "info" : "error"}>
-          <p>{state.status === "server" ? labels.serverNotice : state.code === "account_disabled" ? labels.disabled : labels.errorGeneric}</p>
+          <p>{state.status === "server" ? labels.serverNotice : state.code === "account_disabled" ? labels.disabled : state.code === "account_conflict" ? labels.conflict : labels.errorGeneric}</p>
           {state.status === "error" && state.code !== "account_disabled" && (
             <button type="button" onClick={reload} className="btn btn-outline btn-sm mt-3">{labels.retry}</button>
           )}
@@ -67,7 +69,7 @@ export function ManageShell({
     );
 
   const me = state.me;
-  const nav = (["home", "users", "roles", "audit", "settings"] as ManageSection[]).filter((s) => allowed(me, s));
+  const nav = (["home", "trainees", "trainers", "users", "roles", "audit", "settings"] as ManageSection[]).filter((s) => allowed(me, s));
   const href = (s: ManageSection) => `/${locale}/manage${s === "home" ? "" : `/${s}`}`;
   const role = me.role === "STAFF" && me.adminRole ? staffLabel(labels.roles.STAFF, me.adminRole, locale) : labels.roles[me.role];
   const signOut = async () => {

@@ -386,6 +386,47 @@ model ExamMember {
   // LMS-1: what a STAFF member may do (ignored for every other role)
   adminRoleId String?
   adminRole   AdminRole?         @relation(fields: [adminRoleId], references: [id], onDelete: Restrict)
+  // LMS-2
+  deletedAt      DateTime? // personal data removed; results are kept
+  profile        MemberProfile?
+  qualifications MemberQualification[]
+}
+
+// ───────────── LMS-2: personal and professional profile ─────────────
+// Only the exam_* functions read or write these (supabase/lms-people.sql).
+model MemberProfile {
+  memberId        String     @id
+  member          ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  phone           String     @default("")
+  organization    String     @default("")
+  jobTitle        String     @default("")
+  city            String     @default("")
+  bioAr           String     @default("")
+  bioEn           String     @default("")
+  specialties     String     @default("") // one per line
+  experienceYears Int?
+  photoPath       String? // private bucket "member-files": <memberId>/<uuid>.<ext>
+  adminNotes      String     @default("") // staff only
+  updatedById     String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @default(now()) @updatedAt
+}
+
+model MemberQualification {
+  id         String     @id @default(dbgenerated("gen_random_uuid()::text"))
+  memberId   String
+  member     ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  kind       String     @default("QUALIFICATION") // QUALIFICATION | CERTIFICATE
+  titleAr    String
+  titleEn    String     @default("")
+  issuer     String     @default("")
+  year       Int?
+  credential String     @default("") // certificate number
+  filePath   String? // private bucket "member-files"
+  fileName   String     @default("")
+  createdAt  DateTime   @default(now())
+
+  @@index([memberId])
 }
 
 // ───────────── LMS-1: administrative roles ─────────────
@@ -440,7 +481,10 @@ model Enrollment {
   program        Program    @relation(fields: [programId], references: [id], onDelete: Cascade)
   memberId       String
   member         ExamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  status         String     @default("ACTIVE") // ACTIVE | SUSPENDED | COMPLETED
+  status         String     @default("ACTIVE") // ACTIVE | SUSPENDED | COMPLETED | CANCELLED
+  // LMS-2: validity of the subscription (UTC; null = no limit on that side)
+  startsAt       DateTime?
+  expiresAt      DateTime?
   registrationId String?    // the Registration request it came from, if any
   createdById    String?    // ExamMember.id of the admin/instructor who enrolled
   createdAt      DateTime   @default(now())
