@@ -16,6 +16,7 @@ import { SETTING_KEYS, type SettingKey } from "@/lib/settings";
 import { slugify } from "@/lib/utils";
 import { ADMIN_LANG_COOKIE } from "@/lib/admin-i18n";
 import { emailLayout, sendMail, verifySmtp } from "@/lib/mail";
+import { courseDependents } from "@/lib/course-guard";
 
 export type AdminResult = { ok: boolean; errors?: Record<string, string>; message?: string };
 
@@ -182,7 +183,15 @@ export async function deleteResource(key: string, id: string) {
   if (!def) return;
   const user = await requireStaff(def.role);
   if (key === "users" && id === user.id) redirect(`/admin/content/users/${id}?error=self`);
-  await model(def.model).delete({ where: { id } });
+  if (def.model === "program") {
+    // a course with data is never deleted (the database would remove that data with it): hide it instead
+    const deleted = await db.$transaction(async (tx) => {
+      if ((await courseDependents(tx, id)).length) return false;
+      await tx.program.delete({ where: { id } });
+      return true;
+    }, { isolationLevel: "Serializable", timeout: 30000 });
+    if (!deleted) redirect(`/admin/content/${key}/${id}?error=hasData`);
+  } else await model(def.model).delete({ where: { id } });
   await audit(user.id, "delete", def.model, id);
   revalidatePath("/", "layout");
   redirect(`/admin/content/${key}?deleted=1`);

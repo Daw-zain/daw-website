@@ -90,25 +90,53 @@ Configure SPF/DKIM for your domain with your provider so emails aren't marked as
 
 ## 4. Backups & restore
 
-**Daily automatic backup** (database incl. password hashes + uploaded files, keeps the latest 30):
+**What one backup holds**
 
-```bash
-# crontab -e   (02:00 every day)
-0 2 * * * cd /var/www/daw-site && npm run backup >> backups/backup.log 2>&1
+| Part | Where | Needs |
+|---|---|---|
+| Every database table (website and platform), tested by a trial restore | `backups/full-<time>/` | `DATABASE_URL` |
+| Files uploaded in the local dashboard | `backups/full-<time>/storage/` | — |
+| Files of the online platform (course files and videos, question attachments, member documents, covers) | `backups/files/` | `SUPABASE_SECRET_KEY` |
+| Supabase sign-in accounts | **not included** | — |
+
+```powershell
+npm.cmd run backup        # regular backup, keeps the latest 30 database backups
+npm.cmd run backup:full   # before a change: same, and removes nothing
 ```
 
-On Windows use Task Scheduler to run `npm run backup` in the project folder.
+### Online files: add the secret key once
 
-Copy the `backups/` folder off the server regularly (e.g. rclone to cloud storage). For PostgreSQL you can additionally use `pg_dump daw_site > daw_site.sql`.
+Do this yourself; never send the key to anyone and never commit it.
 
-**Restore plan**
+1. Supabase dashboard → project → **Project Settings → API Keys** → **Secret keys** → copy the key.
+2. Open the `.env` file of the project and add the line `SUPABASE_SECRET_KEY="…your key…"`.
+3. Run `npm.cmd run backup` and check the line starting with **Online files**.
 
-1. Stop the app (`pm2 stop daw-site`).
-2. Make a fresh backup of the current state (`npm run backup`).
-3. Restore: `npm run restore -- backups/<timestamp> --yes` (restores database + `storage/` files).
-4. Start the app (`pm2 start daw-site`) and sign in to verify.
+This key can read and change all platform data. Without it the backup still saves the database and says clearly that the online files were not included. The files folder only grows: a file deleted online stays in the backup. Restoring files is manual (upload them again from the course page or the Supabase dashboard).
 
-The JSON file downloaded from **Admin → Backup** excludes password hashes; after restoring from it, re-create passwords (`npm run db:seed` recreates the admin defined in `.env` if missing, or reset users from the dashboard).
+### Run it every day (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\schedule-backup.ps1
+```
+
+Every day at 21:00 (`-Time 13:30` changes it, `-Remove` stops it). Results are added to `backups\backup.log`: read it from time to time. The computer must be switched on for the task to run.
+
+On Linux: `0 2 * * * cd /var/www/daw-site && npm run backup >> backups/backup.log 2>&1`
+
+**Keep a copy somewhere else.** A backup on the same disk is lost with the disk. Set `BACKUP_DIR` in `.env` to an external disk, or copy the `backups/` folder to private cloud storage. It holds personal data and password hashes.
+
+### Restore plan
+
+1. Stop the app if it is running.
+2. Make a fresh backup of the current state (`npm run backup:full`).
+3. Check the backup you want: `npm run backup:full -- --check backups/full-<time>`
+4. Restore: `npm run restore -- backups/full-<time> --yes` — **replaces all data**.
+5. Start the app and sign in to verify.
+
+**Admin → Backup** in the local dashboard downloads one file with every table, without password hashes. Restore it the same way (`npm run restore -- file.json --yes`), then reset the dashboard passwords with `npm run admin:reset-password`.
+
+Backups made before 2026-11-27 that hold the website tables only (`database.json`) are refused when the database has platform data, because they would delete it. Folders of that time also have a `full/` copy, which is used automatically.
 
 ## 5. Security checklist
 

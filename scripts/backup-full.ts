@@ -1,12 +1,12 @@
 /**
- * Full database backup (every table) with a restore drill.
+ * Full backup before a change (same as `npm run backup`, but no old backup is removed):
  *   npm run backup:full                          → backups/full-<timestamp>/ then tested
- *   npm run backup:full -- --check <folder>      → test an existing backup again
- *   npm run backup:full -- --restore <folder> --yes   ⚠ replaces ALL data in the connected database
+ *   npm run backup:full -- --check <folder|file> → test an existing backup again
+ *   npm run backup:full -- --restore <folder|file> --yes   ⚠ replaces ALL data in the connected database
  */
 import { PrismaClient } from "@prisma/client";
-import path from "node:path";
-import { drill, dumpAll, restoreAll } from "./lib/full-backup";
+import { drill, restoreAll } from "../src/lib/full-backup";
+import { runBackup } from "./lib/backup-run";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -24,19 +24,16 @@ async function main() {
       console.log(`✔ Restored ${m.order.length} tables from the backup of ${m.createdAt}`);
       return;
     }
-    let dir = after("--check");
-    if (!dir) {
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-      dir = path.join(process.cwd(), "backups", `full-${stamp}`);
-      const m = await dumpAll(db, dir);
-      const rows = Object.values(m.tables).reduce((n, t) => n + t.rows, 0);
-      console.log(`✔ Backup written to ${dir} (${m.order.length} tables, ${rows} rows)`);
+    const check = after("--check");
+    if (check) {
+      const res = await drill(db, check);
+      const bad = res.filter((r) => !r.ok);
+      if (bad.length) throw new Error(`Restore test FAILED for: ${bad.map((r) => r.table).join(", ")}`);
+      console.log(`✔ Restore test passed: ${res.length} tables loaded into temporary copies, all identical`);
+      return;
     }
-    const res = await drill(db, dir);
-    const bad = res.filter((r) => !r.ok);
-    if (bad.length) throw new Error(`Restore test FAILED for: ${bad.map((r) => r.table).join(", ")}`);
-    console.log(`✔ Restore test passed: ${res.length} tables loaded into temporary copies, all identical`);
-    console.log("! Not included: Supabase sign-in accounts and uploaded files in Supabase Storage.");
+    const r = await runBackup(db, process.env);
+    if (!r.filesOk) process.exitCode = 1;
   } finally {
     await db.$disconnect();
   }

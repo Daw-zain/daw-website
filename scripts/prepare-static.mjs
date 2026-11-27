@@ -14,7 +14,7 @@ const rm = (p) => rmSync(path.join(root, p), { recursive: true, force: true });
 
 // 1. Server-only code: not part of the public static site.
 for (const p of ["src/app/admin", "src/components/admin", "src/app/api", "src/app/uploads", "src/middleware.ts", "src/app/[locale]/[...rest]"]) rm(p);
-for (const f of ["audit", "notify", "spam", "inbox", "inbox-config", "backup", "csv", "admin-resources", "admin-i18n", "jwt", "storage", "mail"]) rm(`src/lib/${f}.ts`);
+for (const f of ["audit", "notify", "spam", "inbox", "inbox-config", "course-guard", "csv", "admin-resources", "admin-i18n", "jwt", "storage", "mail"]) rm(`src/lib/${f}.ts`);
 for (const f of readdirSync(path.join(root, "scripts"))) if (f.endsWith(".ts")) rm(`scripts/${f}`); // local admin tools
 
 // 1b. Swap the server actions / server session for their browser (Supabase) versions.

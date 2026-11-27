@@ -44,6 +44,7 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+  @@index([userId])
 }
 
 // ───────────── Training ─────────────
@@ -120,6 +121,7 @@ model CourseSession {
   registrations Registration[]
 
   @@index([startDate])
+  @@index([programId])
 }
 
 model Registration {
@@ -144,6 +146,9 @@ model Registration {
   updatedAt    DateTime       @updatedAt
 
   @@index([createdAt])
+  @@index([programId])
+  @@index([sessionId])
+  @@index([userId])
 }
 
 // ───────────── Consulting & corporate ─────────────
@@ -183,6 +188,8 @@ model ConsultationRequest {
   adminNotes    String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
+
+  @@index([serviceId])
 }
 
 model CorporateRequest {
@@ -258,6 +265,7 @@ model Favorite {
   createdAt  DateTime @default(now())
 
   @@unique([userId, resourceId])
+  @@index([resourceId])
 }
 
 // ───────────── Credibility content ─────────────
@@ -394,6 +402,8 @@ model ExamMember {
   profile        MemberProfile?
   qualifications MemberQualification[]
   contentProgress ContentProgress[]
+
+  @@index([adminRoleId])
 }
 
 // ───────────── LMS-2: personal and professional profile ─────────────
@@ -478,6 +488,7 @@ model CourseInstructor {
   updatedAt             DateTime   @default(now()) @updatedAt
 
   @@unique([programId, memberId])
+  @@index([memberId])
 }
 
 model Enrollment {
@@ -496,6 +507,7 @@ model Enrollment {
   updatedAt      DateTime   @default(now()) @updatedAt
 
   @@unique([programId, memberId])
+  @@index([memberId])
 }
 
 model ExamFolder {
@@ -557,6 +569,7 @@ model QuestionCategory {
   subtopicOf  Question[]         @relation("QuestionSubtopic")
 
   @@index([programId])
+  @@index([parentId])
 }
 
 model Question {
@@ -595,6 +608,9 @@ model Question {
 
   @@index([programId, status])
   @@index([scenarioId])
+  @@index([domainId])
+  @@index([subtopicId])
+  @@index([topicId])
 }
 
 model QuestionSecret {
@@ -683,6 +699,7 @@ model ExamAsset {
   createdAt   DateTime @default(now())
 
   @@index([ownerType, ownerId])
+  @@index([programId])
 }
 
 // ───────────── Exam system · Phase 5: exam builder ─────────────
@@ -752,6 +769,7 @@ model ExamItem {
 
   @@unique([examId, questionId])
   @@index([examId, position])
+  @@index([questionId])
 }
 
 model ExamRule {
@@ -1010,6 +1028,7 @@ model CourseItem {
 
   @@index([programId, section])
   @@index([filePath])
+  @@index([folderId])
 }
 
 // earlier versions of a replaced file

@@ -1,39 +1,26 @@
 /**
- * Full backup: database (JSON, including password hashes) + uploaded files.
- *   npm run backup            → backups/<timestamp>/
- * Schedule it daily with cron (Linux) or Task Scheduler (Windows) – see docs/OPERATIONS.md.
- * Keeps the 30 most recent backups.
+ * The regular backup (every database table with a restore test, plus the files):
+ *   npm run backup            → backups/full-<timestamp>/  and  backups/files/
+ * Keeps the latest 30 database backups (BACKUP_KEEP). BACKUP_DIR chooses another place, for example an
+ * external disk. Schedule it daily with scripts/schedule-backup.ps1 (Windows) – see docs/OPERATIONS.md.
  */
 import { PrismaClient } from "@prisma/client";
-import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { buildBackup } from "../src/lib/backup";
-import { dumpAll } from "./lib/full-backup";
-
-const KEEP = Number(process.env.BACKUP_KEEP || 30);
+import { prune, runBackup } from "./lib/backup-run";
 
 async function main() {
   const db = new PrismaClient();
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const root = path.join(process.cwd(), "backups");
-  const dir = path.join(root, stamp);
-  await mkdir(dir, { recursive: true });
-
-  const data = await buildBackup(db, { includePasswordHashes: true });
-  await writeFile(path.join(dir, "database.json"), JSON.stringify(data));
-  // database.json covers the website tables (used by "npm run restore"); full/ holds EVERY table, exams included
-  await dumpAll(db, path.join(dir, "full"));
-  const storage = path.join(process.cwd(), "storage");
-  if (existsSync(storage)) await cp(storage, path.join(dir, "storage"), { recursive: true });
-  await db.$disconnect();
-  console.log(`✔ Backup written to ${dir}`);
-
-  const all = (await readdir(root)).sort();
-  for (const old of all.slice(0, Math.max(0, all.length - KEEP))) await rm(path.join(root, old), { recursive: true, force: true });
+  try {
+    console.log(`— ${new Date().toISOString()} —`);
+    const r = await runBackup(db, process.env);
+    const removed = await prune(r.root, Number(process.env.BACKUP_KEEP || 30));
+    if (removed.length) console.log(`✔ Removed ${removed.length} old backup(s)`);
+    if (!r.filesOk) process.exitCode = 1;
+  } finally {
+    await db.$disconnect();
+  }
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error("✗", e instanceof Error ? e.message : e);
   process.exit(1);
 });

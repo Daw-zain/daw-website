@@ -2,13 +2,16 @@
  * Complete database backup: EVERY table of the public schema (website + exam system), with a restore drill.
  *
  * Not included (they live outside these tables): Supabase sign-in accounts (auth schema) and the files in
- * Supabase Storage. Member records (ExamMember) are included.
+ * Supabase Storage (copied separately by scripts/lib/storage-mirror.ts). Member records are included.
  *
  * The files contain personal data and password hashes: they stay in backups/ (never committed to git).
+ * The one-file download of the website dashboard is the same backup without the password hashes.
+ *
+ * This is the only backup format: the scripts and the dashboard both use it.
  */
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export type Manifest = {
@@ -20,6 +23,11 @@ export type Manifest = {
   tables: Record<string, { rows: number; checksum: string; sha256: string }>;
 };
 
+/** the same backup as a single file (the dashboard download) */
+export type Bundle = Manifest & { passwordHashes: boolean; data: Record<string, string> };
+/** written where a password hash was left out: nobody can sign in with it until it is reset */
+export const NO_PASSWORD = "!reset-required";
+
 type Tx = Prisma.TransactionClient;
 const TX = { timeout: 10 * 60 * 1000, maxWait: 30000 };
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -29,9 +37,9 @@ const ident = (name: string) => {
 };
 
 /** order-independent fingerprint of a table's rows */
-async function fingerprint(tx: Tx, from: string): Promise<{ rows: number; checksum: string }> {
+async function fingerprint(tx: Tx, from: string, row = "to_jsonb(t)"): Promise<{ rows: number; checksum: string }> {
   const [r] = await tx.$queryRawUnsafe<{ n: number; h: string }[]>(
-    `select count(*)::int n, coalesce(md5(string_agg(j, E'\\n' order by j collate "C")), '') h from (select to_jsonb(t)::text j from ${from} t) s`,
+    `select count(*)::int n, coalesce(md5(string_agg(j, E'\\n' order by j collate "C")), '') h from (select (${row})::text j from ${from} t) s`,
   );
   return { rows: r.n, checksum: r.h };
 }
@@ -58,37 +66,54 @@ async function schemaInfo(tx: Tx) {
   return { order, fks };
 }
 
-/** writes tables/<name>.json + manifest.json into dir, all read from one consistent snapshot */
-export async function dumpAll(db: PrismaClient, dir: string): Promise<Manifest> {
-  await mkdir(path.join(dir, "tables"), { recursive: true });
-  const files: [string, string][] = [];
+/** every table, read from one consistent snapshot */
+async function snapshot(db: PrismaClient, passwordHashes: boolean): Promise<{ manifest: Manifest; data: Record<string, string> }> {
+  const data: Record<string, string> = {};
   const manifest = await db.$transaction(
     async (tx) => {
       await tx.$executeRawUnsafe(`set local timezone = 'UTC'`);
       const { order } = await schemaInfo(tx);
       const m: Manifest = { format: "daw-full-backup", version: 1, createdAt: new Date().toISOString(), order, tables: {} };
       for (const t of order) {
+        const row = !passwordHashes && t === "User" ? `to_jsonb(t) || jsonb_build_object('passwordHash', '${NO_PASSWORD}')` : "to_jsonb(t)";
         // kept as the database's own text, so numbers and dates are stored exactly
-        const [{ data }] = await tx.$queryRawUnsafe<{ data: string }[]>(`select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)::text data from public.${ident(t)} t`);
-        m.tables[t] = { ...(await fingerprint(tx, `public.${ident(t)}`)), sha256: sha(data) };
-        files.push([t, data]);
+        const [r] = await tx.$queryRawUnsafe<{ data: string }[]>(`select coalesce(jsonb_agg(${row}), '[]'::jsonb)::text data from public.${ident(t)} t`);
+        m.tables[t] = { ...(await fingerprint(tx, `public.${ident(t)}`, row)), sha256: sha(r.data) };
+        data[t] = r.data;
       }
       return m;
     },
     { ...TX, isolationLevel: "RepeatableRead" },
   );
-  for (const [t, data] of files) await writeFile(path.join(dir, "tables", `${t}.json`), data, "utf8");
+  return { manifest, data };
+}
+
+/** writes tables/<name>.json + manifest.json into dir */
+export async function dumpAll(db: PrismaClient, dir: string): Promise<Manifest> {
+  const { manifest, data } = await snapshot(db, true);
+  await mkdir(path.join(dir, "tables"), { recursive: true });
+  for (const t of manifest.order) await writeFile(path.join(dir, "tables", `${t}.json`), data[t], "utf8");
+  // the manifest is written last: a folder without it is an unfinished backup
   await writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
   return manifest;
 }
 
-async function load(dir: string) {
-  const manifest = JSON.parse(await readFile(path.join(dir, "manifest.json"), "utf8")) as Manifest;
-  if (manifest.format !== "daw-full-backup") throw new Error("Not a full backup folder");
+/** the whole database as one object, for a download */
+export async function exportBundle(db: PrismaClient, opts: { passwordHashes: boolean }): Promise<Bundle> {
+  const { manifest, data } = await snapshot(db, opts.passwordHashes);
+  return { ...manifest, passwordHashes: opts.passwordHashes, data };
+}
+
+/** reads a backup folder, or a downloaded single file, and checks that nothing in it was altered */
+export async function loadBackup(source: string) {
+  const single = (await stat(source)).isFile();
+  const manifest = JSON.parse(await readFile(single ? source : path.join(source, "manifest.json"), "utf8")) as Manifest & { data?: Record<string, string> };
+  if (manifest.format !== "daw-full-backup") throw new Error("Not a full backup");
   const data: Record<string, string> = {};
   for (const t of manifest.order) {
-    data[t] = await readFile(path.join(dir, "tables", `${t}.json`), "utf8");
-    if (sha(data[t]) !== manifest.tables[t].sha256) throw new Error(`File of table ${t} was changed or damaged`);
+    ident(t);
+    data[t] = single ? String(manifest.data?.[t] ?? "") : await readFile(path.join(source, "tables", `${t}.json`), "utf8");
+    if (sha(data[t]) !== manifest.tables[t].sha256) throw new Error(`The data of table ${t} was changed or damaged`);
   }
   return { manifest, data };
 }
@@ -100,8 +125,8 @@ const insertSql = (target: string, table: string) => `insert into ${target} sele
  * compares every table with the fingerprint taken at backup time, then rolls everything back.
  * Live tables are only read (for their definitions).
  */
-export async function drill(db: PrismaClient, dir: string): Promise<{ table: string; rows: number; ok: boolean }[]> {
-  const { manifest, data } = await load(dir);
+export async function drill(db: PrismaClient, source: string): Promise<{ table: string; rows: number; ok: boolean }[]> {
+  const { manifest, data } = await loadBackup(source);
   const results: { table: string; rows: number; ok: boolean }[] = [];
   const DONE = new Error("drill finished");
   try {
@@ -111,6 +136,8 @@ export async function drill(db: PrismaClient, dir: string): Promise<{ table: str
       const tmp = (t: string) => ident(`_r_${t}`);
       for (const t of manifest.order) await tx.$executeRawUnsafe(`create temporary table ${tmp(t)} (like public.${ident(t)} including defaults including constraints including indexes) on commit drop`);
       for (const f of fks) {
+        // a table added after the backup was taken has no temporary copy to point at
+        if (!manifest.tables[f.child] || !manifest.tables[f.parent]) continue;
         const def = f.def.replace(/REFERENCES (?:public\.)?"?[A-Za-z0-9_]+"?\(/, `REFERENCES ${tmp(f.parent)}(`);
         await tx.$executeRawUnsafe(`alter table ${tmp(f.child)} add ${def}`);
       }
@@ -128,8 +155,8 @@ export async function drill(db: PrismaClient, dir: string): Promise<{ table: str
 }
 
 /** ⚠ Replaces ALL rows of the connected database with the backup, in one transaction (all or nothing). */
-export async function restoreAll(db: PrismaClient, dir: string) {
-  const { manifest, data } = await load(dir);
+export async function restoreAll(db: PrismaClient, source: string) {
+  const { manifest, data } = await loadBackup(source);
   await db.$transaction(async (tx) => {
     const { order } = await schemaInfo(tx);
     const missing = manifest.order.filter((t) => !order.includes(t));

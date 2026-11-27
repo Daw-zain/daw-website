@@ -18,6 +18,7 @@ create or replace function public.exam_folder_perm(p_kind text)
 returns text
 language sql
 immutable
+set search_path = public
 as $$
   select case p_kind when 'DOMAIN_TESTS' then 'canManageDomainTests' when 'EXAM_SIMULATIONS' then 'canManageSimulations' end
 $$;

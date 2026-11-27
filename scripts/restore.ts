@@ -1,54 +1,53 @@
 /**
- * Restore a backup created by `npm run backup` (or downloaded from Admin → Backup).
- *   npm run restore -- backups/2026-01-31-02-00-00
- *   npm run restore -- path/to/daw-site-backup.json
- * ⚠ This REPLACES all current data in the database. Make a fresh backup first.
+ * ⚠ Restore a backup. REPLACES all current data in the database. Make a fresh backup first.
+ *   npm run restore -- backups/full-2026-01-31-02-00-00 --yes      (a backup folder)
+ *   npm run restore -- path/to/daw-site-full-backup.json --yes     (downloaded from the dashboard)
+ * Older backups that hold the website tables only are accepted only into a database without platform data,
+ * because replacing the courses would delete everything that belongs to them.
  */
 import { PrismaClient } from "@prisma/client";
 import { cp, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { BACKUP_TABLES } from "../src/lib/backup";
-
-const DATE_KEYS = /(At|Date)$/;
+import { restoreAll } from "../src/lib/full-backup";
+import { platformData, restoreWebsiteOnly, WEBSITE_ONLY_FORMAT } from "./lib/restore-website";
 
 async function main() {
   const target = process.argv[2];
-  if (!target) throw new Error("Usage: npm run restore -- <backup folder or .json file>");
+  if (!target) throw new Error("Usage: npm run restore -- <backup folder or .json file> --yes");
   if (!process.argv.includes("--yes")) {
     console.log("This will REPLACE all data in the current database. Re-run with --yes to confirm:");
     console.log(`  npm run restore -- ${target} --yes`);
     return;
   }
   const isDir = (await stat(target)).isDirectory();
-  const file = isDir ? path.join(target, "database.json") : target;
-  const backup = JSON.parse(await readFile(file, "utf8"));
-  if (backup.format !== "daw-site-backup") throw new Error("Not a Daw site backup file");
+  // a folder of the old `npm run backup` keeps the full copy in its "full" sub-folder
+  const full = isDir ? [target, path.join(target, "full")].find((d) => existsSync(path.join(d, "manifest.json"))) : undefined;
+  const single = !isDir ? JSON.parse(await readFile(target, "utf8")) : undefined;
 
   const db = new PrismaClient();
-  await db.$transaction(async (tx) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tm = (t: string) => (tx as any)[t];
-    for (const t of [...BACKUP_TABLES].reverse()) await tm(t).deleteMany();
-    for (const t of BACKUP_TABLES) {
-      const rows = (backup.data[t] ?? []) as Record<string, unknown>[];
-      for (const r of rows) {
-        for (const [k, v] of Object.entries(r)) if (DATE_KEYS.test(k) && typeof v === "string") r[k] = new Date(v);
-        if (t === "user" && !r.passwordHash) r.passwordHash = "!reset-required"; // JSON downloads exclude hashes
-        await tm(t).create({ data: r });
-      }
-      console.log(`✔ ${t}: ${rows.length}`);
+  try {
+    if (full || single?.format === "daw-full-backup") {
+      const m = await restoreAll(db, full ?? target);
+      console.log(`✔ Restored ${m.order.length} tables from the backup of ${m.createdAt}`);
+      if (single && single.passwordHashes === false) console.log("! This backup has no password hashes: reset the dashboard passwords with `npm run admin:reset-password`.");
+    } else {
+      const backup = single ?? JSON.parse(await readFile(path.join(target, "database.json"), "utf8"));
+      if (backup.format !== WEBSITE_ONLY_FORMAT) throw new Error("Not a Daw site backup");
+      const found = await platformData(db);
+      if (found.length) throw new Error(`Refused: this backup holds the website tables only, and the database has platform data (${found.join(", ")}) that it would delete. Use a full backup.`);
+      await restoreWebsiteOnly(db, backup, console.log);
     }
-  }, { timeout: 10 * 60 * 1000 });
-  if (isDir && existsSync(path.join(target, "storage"))) {
-    await cp(path.join(target, "storage"), path.join(process.cwd(), "storage"), { recursive: true });
-    console.log("✔ storage/ files restored");
+    if (isDir && existsSync(path.join(target, "storage"))) {
+      await cp(path.join(target, "storage"), path.join(process.cwd(), "storage"), { recursive: true });
+      console.log("✔ storage/ files restored");
+    }
+  } finally {
+    await db.$disconnect();
   }
-  await db.$disconnect();
-  if (!backup.includesPasswordHashes) console.log("! This backup had no password hashes: reset passwords with `npm run db:seed` (admin) or from the dashboard.");
 }
 
 main().catch((e) => {
-  console.error(e);
+  console.error("✗", e instanceof Error ? e.message : e);
   process.exit(1);
 });
