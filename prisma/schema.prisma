@@ -377,12 +377,35 @@ model ExamMember {
   authUserId  String             @unique // auth.users.id
   email       String             @unique
   name        String             @default("")
-  role        String             @default("LEARNER") // ADMIN | INSTRUCTOR | LEARNER
+  role        String             @default("LEARNER") // ADMIN (= super admin) | STAFF (admin with a role) | INSTRUCTOR | LEARNER
   active      Boolean            @default(true)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @default(now()) @updatedAt
   instructing CourseInstructor[]
   enrollments Enrollment[]
+  // LMS-1: what a STAFF member may do (ignored for every other role)
+  adminRoleId String?
+  adminRole   AdminRole?         @relation(fields: [adminRoleId], references: [id], onDelete: Restrict)
+}
+
+// ───────────── LMS-1: administrative roles ─────────────
+// A named set of permissions the super admin gives to STAFF members. "permissions" is
+// { "<section>": ["<action>", …] } — the allowed values are defined in supabase/lms-access.sql,
+// where every permission is enforced.
+model AdminRole {
+  id          String       @id @default(dbgenerated("gen_random_uuid()::text"))
+  key         String       @unique
+  nameAr      String
+  nameEn      String       @default("")
+  descAr      String       @default("")
+  descEn      String       @default("")
+  system      Boolean      @default(false) // shipped with the platform: editable, not deletable
+  active      Boolean      @default(true)
+  permissions Json         @default("{}")
+  createdById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
+  members     ExamMember[]
 }
 
 model CourseInstructor {

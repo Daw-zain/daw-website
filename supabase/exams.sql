@@ -72,6 +72,90 @@ as $$
   where m."authUserId" = public.exam_jwt_claim('sub') and m."active"
 $$;
 
+-- ── LMS-1: roles and permissions ──
+-- Base roles (ExamMember.role):
+--   ADMIN      = super admin: everything, always.
+--   STAFF      = admin: only what their AdminRole grants (nothing if the role is missing or switched off).
+--   INSTRUCTOR = trainer: only the courses assigned to them, with the per-course permissions.
+--   LEARNER    = trainee.
+-- A trainer assignment (CourseInstructor) adds course permissions to any member, STAFF included.
+
+-- every section and action a role can grant — the single list the server accepts
+create or replace function public.lms_permission_catalogue()
+returns jsonb
+language sql
+immutable
+set search_path = public
+as $$
+  select '{
+    "users": ["read", "update"],
+    "trainers": ["update"],
+    "trainees": ["update"],
+    "question_bank": ["read", "update", "import", "delete", "export"],
+    "exams": ["manage", "publish"],
+    "results": ["read", "update"],
+    "audit": ["read", "export"],
+    "settings": ["update"]
+  }'::jsonb
+$$;
+
+-- may the caller do this action in this section? (platform-wide permission)
+create or replace function public.exam_can(p_section text, p_action text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare me public."ExamMember";
+begin
+  me := public.exam_current_member();
+  if me."id" is null then return false; end if;
+  if me."role" = 'ADMIN' then return coalesce((public.lms_permission_catalogue() -> p_section) ? p_action, false); end if;
+  if me."role" <> 'STAFF' then return false; end if;
+  return exists (select 1 from public."AdminRole" r
+                 where r."id" = me."adminRoleId" and r."active" and coalesce((r."permissions" -> p_section) ? p_action, false));
+end $$;
+
+create or replace function public.exam_require(p_section text, p_action text)
+returns public."ExamMember"
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not coalesce(public.exam_can(p_section, p_action), false) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  return public.exam_current_member();
+end $$;
+
+-- the platform permission that stands for a per-course permission
+create or replace function public.exam_staff_course_perm(p_perm text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(case p_perm
+    when 'canEditQuestions' then public.exam_can('question_bank', 'update')
+    when 'canManageCategories' then public.exam_can('question_bank', 'update')
+    when 'canManageScenarios' then public.exam_can('question_bank', 'update')
+    when 'canDeleteQuestions' then public.exam_can('question_bank', 'delete')
+    when 'canImport' then public.exam_can('question_bank', 'import')
+    when 'canExport' then public.exam_can('question_bank', 'export')
+    when 'canCreateExams' then public.exam_can('exams', 'manage')
+    when 'canManageDomainTests' then public.exam_can('exams', 'manage')
+    when 'canManageSimulations' then public.exam_can('exams', 'manage')
+    when 'canPublishExams' then public.exam_can('exams', 'publish')
+    when 'canViewResults' then public.exam_can('results', 'read')
+    when 'canReviewEssays' then public.exam_can('results', 'update')
+    when 'canReopenAttempts' then public.exam_can('results', 'update')
+  end, false)
+$$;
+
 -- 'ADMIN' | 'INSTRUCTOR' | 'LEARNER' | null — the caller's relation to one course
 create or replace function public.exam_course_access(p_program text)
 returns text
@@ -85,16 +169,19 @@ begin
   me := public.exam_current_member();
   if me."id" is null then return null; end if;
   if me."role" = 'ADMIN' then return 'ADMIN'; end if;
-  if exists (select 1 from public."CourseInstructor" ci where ci."programId" = p_program and ci."memberId" = me."id") then
+  -- a trainer assignment counts for everyone except someone who is now a plain trainee
+  if me."role" <> 'LEARNER' and exists (select 1 from public."CourseInstructor" ci where ci."programId" = p_program and ci."memberId" = me."id") then
     return 'INSTRUCTOR';
   end if;
+  -- an admin whose role includes the question banks works in every course like its staff
+  if public.exam_can('question_bank', 'read') then return 'INSTRUCTOR'; end if;
   if exists (select 1 from public."Enrollment" e where e."programId" = p_program and e."memberId" = me."id" and e."status" = 'ACTIVE') then
     return 'LEARNER';
   end if;
   return null;
 end $$;
 
--- true when the caller is an admin, or an instructor of the course with that permission column set
+-- true for the super admin, a trainer of the course with that permission, or an admin whose role covers it
 create or replace function public.exam_instructor_can(p_program text, p_perm text)
 returns boolean
 language plpgsql
@@ -107,9 +194,8 @@ begin
   me := public.exam_current_member();
   if me."id" is null then return false; end if;
   if me."role" = 'ADMIN' then return true; end if;
-  select * into ci from public."CourseInstructor" where "programId" = p_program and "memberId" = me."id";
-  if ci."id" is null then return false; end if;
-  return coalesce((to_jsonb(ci) ->> p_perm)::boolean, false);
+  select * into ci from public."CourseInstructor" where "programId" = p_program and "memberId" = me."id" and me."role" <> 'LEARNER';
+  return coalesce((to_jsonb(ci) ->> p_perm)::boolean, false) or public.exam_staff_course_perm(p_perm);
 end $$;
 
 create or replace function public.exam_log(p_action text, p_entity text, p_entity_id text, p_program text, p_details jsonb)
@@ -153,6 +239,8 @@ declare
   v_email text := lower(coalesce(public.exam_jwt_claim('email'), ''));
   me public."ExamMember";
   v_courses jsonb;
+  v_platform jsonb;
+  v_staff boolean;
 begin
   if v_sub is null or v_email = '' then
     raise exception 'not_authenticated' using errcode = '28000';
@@ -176,21 +264,34 @@ begin
     raise exception 'account_disabled' using errcode = '42501';
   end if;
 
+  v_staff := public.exam_can('question_bank', 'read') and me."role" = 'STAFF';
   select coalesce(jsonb_agg(c order by c ->> 'order', c ->> 'code'), '[]'::jsonb) into v_courses
   from (
     select jsonb_build_object(
       'programId', p."id", 'slug', p."slug", 'code', p."code", 'titleAr', p."titleAr", 'titleEn', p."titleEn",
       'order', lpad(p."order"::text, 6, '0'),
-      'access', case when me."role" = 'ADMIN' then 'ADMIN' when ci."id" is not null then 'INSTRUCTOR' else 'LEARNER' end,
-      'permissions', case when ci."id" is not null then to_jsonb(ci) - 'id' - 'programId' - 'memberId' - 'createdAt' - 'updatedAt' end
+      'access', case when me."role" = 'ADMIN' then 'ADMIN' when ci."id" is not null or v_staff then 'INSTRUCTOR' else 'LEARNER' end,
+      'viaRole', v_staff and ci."id" is null,
+      -- the effective permissions: trainer assignment and admin role together
+      'permissions', case when me."role" <> 'ADMIN' and (ci."id" is not null or v_staff) then (
+        select jsonb_object_agg(k, public.exam_instructor_can(p."id", k)) from unnest(array[
+          'canEditQuestions', 'canDeleteQuestions', 'canManageCategories', 'canManageScenarios', 'canImport', 'canExport', 'canCreateExams',
+          'canPublishExams', 'canManageDomainTests', 'canManageSimulations', 'canViewResults', 'canReviewEssays', 'canReopenAttempts']) k) end
     ) as c
     from public."Program" p
-    left join public."CourseInstructor" ci on ci."programId" = p."id" and ci."memberId" = me."id"
+    left join public."CourseInstructor" ci on ci."programId" = p."id" and ci."memberId" = me."id" and me."role" <> 'LEARNER'
     left join public."Enrollment" e on e."programId" = p."id" and e."memberId" = me."id" and e."status" = 'ACTIVE'
-    where me."role" = 'ADMIN' or ci."id" is not null or e."id" is not null
+    where me."role" = 'ADMIN' or v_staff or ci."id" is not null or e."id" is not null
   ) s;
 
-  return jsonb_build_object('id', me."id", 'email', me."email", 'name', me."name", 'role', me."role", 'courses', v_courses);
+  select coalesce(jsonb_object_agg(sec.key, a.actions), '{}'::jsonb) into v_platform
+  from jsonb_each(public.lms_permission_catalogue()) sec
+  cross join lateral (select jsonb_agg(x) actions from jsonb_array_elements_text(sec.value) x where public.exam_can(sec.key, x)) a
+  where a.actions is not null;
+
+  return jsonb_build_object('id', me."id", 'email', me."email", 'name', me."name", 'role', me."role", 'courses', v_courses,
+    'platform', v_platform,
+    'adminRole', (select jsonb_build_object('nameAr', r."nameAr", 'nameEn', r."nameEn") from public."AdminRole" r where r."id" = me."adminRoleId" and me."role" = 'STAFF'));
 end $$;
 
 -- Folders of one course that the caller may open (learners never see the question bank)
@@ -234,10 +335,12 @@ security definer
 set search_path = public
 as $$
 begin
-  perform public.exam_require_admin();
+  perform public.exam_require('users', 'read');
   return (
     select coalesce(jsonb_agg(jsonb_build_object(
       'id', m."id", 'email', m."email", 'name', m."name", 'role', m."role", 'active', m."active", 'createdAt', m."createdAt",
+      'adminRoleId', m."adminRoleId",
+      'adminRole', (select jsonb_build_object('nameAr', r."nameAr", 'nameEn', r."nameEn", 'active', r."active") from public."AdminRole" r where r."id" = m."adminRoleId"),
       'instructing', (select coalesce(jsonb_agg(to_jsonb(ci) - 'id' - 'memberId' - 'createdAt' - 'updatedAt'), '[]'::jsonb)
                       from public."CourseInstructor" ci where ci."memberId" = m."id"),
       'enrollments', (select coalesce(jsonb_agg(jsonb_build_object('programId', e."programId", 'status', e."status", 'since', e."createdAt")), '[]'::jsonb)
@@ -249,28 +352,37 @@ begin
 end $$;
 
 -- Admin: change a member's site role
-create or replace function public.exam_admin_set_role(p_email text, p_role text)
+create or replace function public.exam_admin_set_role(p_email text, p_role text, p_admin_role text default null)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin(); target public."ExamMember";
+declare me public."ExamMember" := public.exam_require('users', 'update'); target public."ExamMember"; v_role public."AdminRole";
 begin
-  if p_role not in ('ADMIN', 'INSTRUCTOR', 'LEARNER') then
+  if p_role is null or p_role not in ('ADMIN', 'STAFF', 'INSTRUCTOR', 'LEARNER') then
     raise exception 'invalid_role' using errcode = '22023';
   end if;
   select * into target from public."ExamMember" where "email" = lower(trim(p_email));
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
+  -- only the super admin manages administrators; nobody else changes their own role
+  if me."role" <> 'ADMIN' and (target."role" in ('ADMIN', 'STAFF') or p_role in ('ADMIN', 'STAFF') or target."id" = me."id") then
+    raise exception 'super_admin_only' using errcode = '42501';
+  end if;
+  if p_role = 'STAFF' then
+    select * into v_role from public."AdminRole" where "id" = p_admin_role and "active";
+    if v_role."id" is null then raise exception 'invalid_admin_role' using errcode = '22023'; end if;
+  end if;
   if target."role" = 'ADMIN' and p_role <> 'ADMIN'
      and (select count(*) from public."ExamMember" where "role" = 'ADMIN' and "active") <= 1 then
     raise exception 'last_admin' using errcode = '42501';
   end if;
-  update public."ExamMember" set "role" = p_role, "updatedAt" = now() where "id" = target."id";
-  perform public.exam_log('member.role', 'ExamMember', target."id", null, jsonb_build_object('from', target."role", 'to', p_role));
-  return jsonb_build_object('email', target."email", 'role', p_role);
+  update public."ExamMember" set "role" = p_role, "adminRoleId" = v_role."id", "updatedAt" = now() where "id" = target."id";
+  perform public.exam_log('member.role', 'ExamMember', target."id", null,
+    jsonb_strip_nulls(jsonb_build_object('email', target."email", 'from', target."role", 'to', p_role, 'adminRole', v_role."nameAr")));
+  return jsonb_build_object('email', target."email", 'role', p_role, 'adminRoleId', v_role."id");
 end $$;
 
 -- Admin: enable / disable a member (a disabled member is refused by every exam_* function)
@@ -280,17 +392,21 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin(); target public."ExamMember";
+declare me public."ExamMember" := public.exam_require('users', 'update'); target public."ExamMember";
 begin
+  if p_active is null then raise exception 'invalid_status' using errcode = '22023'; end if;
   select * into target from public."ExamMember" where "email" = lower(trim(p_email));
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
+  end if;
+  if me."role" <> 'ADMIN' and target."role" in ('ADMIN', 'STAFF') then
+    raise exception 'super_admin_only' using errcode = '42501';
   end if;
   if not p_active and target."id" = me."id" then
     raise exception 'cannot_disable_self' using errcode = '42501';
   end if;
   update public."ExamMember" set "active" = p_active, "updatedAt" = now() where "id" = target."id";
-  perform public.exam_log(case when p_active then 'member.enable' else 'member.disable' end, 'ExamMember', target."id", null, null);
+  perform public.exam_log(case when p_active then 'member.enable' else 'member.disable' end, 'ExamMember', target."id", null, jsonb_build_object('email', target."email"));
   return jsonb_build_object('email', target."email", 'active', p_active);
 end $$;
 
@@ -301,7 +417,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin(); target public."ExamMember"; ci public."CourseInstructor";
+declare me public."ExamMember" := public.exam_require('trainers', 'update'); target public."ExamMember"; ci public."CourseInstructor"; v_before jsonb; k text;
 begin
   if not exists (select 1 from public."Program" where "id" = p_program) then
     raise exception 'course_not_found' using errcode = 'P0002';
@@ -310,6 +426,10 @@ begin
   if target."id" is null then
     raise exception 'member_not_found' using errcode = 'P0002';
   end if;
+  if me."role" <> 'ADMIN' and (target."role" in ('ADMIN', 'STAFF') or target."id" = me."id") then
+    raise exception 'super_admin_only' using errcode = '42501';
+  end if;
+  select to_jsonb(c) into v_before from public."CourseInstructor" c where c."programId" = p_program and c."memberId" = target."id";
   if target."role" = 'LEARNER' then
     update public."ExamMember" set "role" = 'INSTRUCTOR', "updatedAt" = now() where "id" = target."id";
   end if;
@@ -337,7 +457,16 @@ begin
   where c."id" = ci."id"
   returning * into ci;
 
-  perform public.exam_log('instructor.assign', 'CourseInstructor', ci."id", p_program, p_perms);
+  -- nobody can give more than they have: a permission switched on here must be one the caller holds
+  if me."role" <> 'ADMIN' then
+    for k in select key from jsonb_each(to_jsonb(ci)) where key like 'can%' and value = 'true'::jsonb loop
+      if not coalesce((v_before ->> k)::boolean, false) and not public.exam_instructor_can(p_program, k) then
+        raise exception 'cannot_grant' using errcode = '42501';
+      end if;
+    end loop;
+  end if;
+
+  perform public.exam_log('instructor.assign', 'CourseInstructor', ci."id", p_program, coalesce(p_perms, '{}'::jsonb) || jsonb_build_object('email', target."email"));
   return to_jsonb(ci);
 end $$;
 
@@ -347,8 +476,11 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin(); v_id text;
+declare me public."ExamMember" := public.exam_require('trainers', 'update'); v_id text;
 begin
+  if me."role" <> 'ADMIN' and exists (select 1 from public."ExamMember" t where t."email" = lower(trim(p_email)) and (t."role" in ('ADMIN', 'STAFF') or t."id" = me."id")) then
+    raise exception 'super_admin_only' using errcode = '42501';
+  end if;
   delete from public."CourseInstructor" ci using public."ExamMember" m
   where ci."memberId" = m."id" and m."email" = lower(trim(p_email)) and ci."programId" = p_program
   returning ci."id" into v_id;
@@ -365,7 +497,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin(); target public."ExamMember"; en public."Enrollment";
+declare me public."ExamMember" := public.exam_require('trainees', 'update'); target public."ExamMember"; en public."Enrollment";
 begin
   if p_status not in ('ACTIVE', 'SUSPENDED', 'COMPLETED') then
     raise exception 'invalid_status' using errcode = '22023';
@@ -400,7 +532,7 @@ begin
   end if;
   return jsonb_build_object(
     'instructors', (select coalesce(jsonb_agg(jsonb_build_object('email', m."email", 'name', m."name") order by m."name"), '[]'::jsonb)
-                    from public."CourseInstructor" ci join public."ExamMember" m on m."id" = ci."memberId" where ci."programId" = p_program),
+                    from public."CourseInstructor" ci join public."ExamMember" m on m."id" = ci."memberId" where ci."programId" = p_program and m."role" <> 'LEARNER'),
     'learners', (select coalesce(jsonb_agg(jsonb_build_object('email', m."email", 'name', m."name", 'status', e."status", 'since', e."createdAt") order by m."name"), '[]'::jsonb)
                  from public."Enrollment" e join public."ExamMember" m on m."id" = e."memberId" where e."programId" = p_program)
   );
@@ -410,7 +542,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['ExamMember', 'CourseInstructor', 'Enrollment', 'ExamFolder', 'ExamAuditLog'] loop
+  foreach t in array array['ExamMember', 'CourseInstructor', 'Enrollment', 'ExamFolder', 'ExamAuditLog', 'AdminRole'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
   end loop;
@@ -424,11 +556,16 @@ revoke all on function public.exam_course_access(text) from public, anon, authen
 revoke all on function public.exam_instructor_can(text, text) from public, anon, authenticated;
 revoke all on function public.exam_log(text, text, text, text, jsonb) from public, anon, authenticated;
 revoke all on function public.exam_require_admin() from public, anon, authenticated;
+revoke all on function public.lms_permission_catalogue() from public, anon, authenticated;
+revoke all on function public.exam_can(text, text) from public, anon, authenticated;
+revoke all on function public.exam_require(text, text) from public, anon, authenticated;
+revoke all on function public.exam_staff_course_perm(text) from public, anon, authenticated;
 
 revoke all on function public.exam_me() from public, anon;
 revoke all on function public.exam_course_folders(text) from public, anon;
 revoke all on function public.exam_admin_members(text) from public, anon;
-revoke all on function public.exam_admin_set_role(text, text) from public, anon;
+drop function if exists public.exam_admin_set_role(text, text);
+revoke all on function public.exam_admin_set_role(text, text, text) from public, anon;
 revoke all on function public.exam_admin_set_active(text, boolean) from public, anon;
 revoke all on function public.exam_admin_assign_instructor(text, text, jsonb) from public, anon;
 revoke all on function public.exam_admin_remove_instructor(text, text) from public, anon;
@@ -438,7 +575,7 @@ revoke all on function public.exam_course_people(text) from public, anon;
 grant execute on function public.exam_me() to authenticated;
 grant execute on function public.exam_course_folders(text) to authenticated;
 grant execute on function public.exam_admin_members(text) to authenticated;
-grant execute on function public.exam_admin_set_role(text, text) to authenticated;
+grant execute on function public.exam_admin_set_role(text, text, text) to authenticated;
 grant execute on function public.exam_admin_set_active(text, boolean) to authenticated;
 grant execute on function public.exam_admin_assign_instructor(text, text, jsonb) to authenticated;
 grant execute on function public.exam_admin_remove_instructor(text, text) to authenticated;

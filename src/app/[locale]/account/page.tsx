@@ -30,7 +30,7 @@ export default async function Account({ params }: { params: Promise<{ locale: st
     return (
       <StaticAccount
         locale={locale}
-        labels={{ welcome: t.account.welcome, dashboardText: t.account.dashboardText, logout: t.nav.logout, savedList: t.knowledge.savedList, noFavorites: t.account.noFavorites, knowledge: t.nav.knowledge, exams: t.exams.navLabel }}
+        labels={{ welcome: t.account.welcome, dashboardText: t.account.dashboardText, logout: t.nav.logout, savedList: t.knowledge.savedList, noFavorites: t.account.noFavorites, knowledge: t.nav.knowledge, exams: t.exams.navLabel, admin: t.exams.manage.open }}
         resources={resources.map((r) => ({ id: r.id, node: <ResourceCard r={r} locale={locale} t={t} /> }))}
       />
     );

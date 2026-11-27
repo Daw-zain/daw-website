@@ -428,7 +428,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare me public."ExamMember" := public.exam_require_admin();
+declare me public."ExamMember" := public.exam_require('settings', 'update');
 begin
   if p_streak is null or p_streak < 1 or p_streak > 5 then raise exception 'invalid_mistakes: streak'; end if;
   insert into public."Setting" ("key", "value", "updatedAt") values ('examMasteryStreak', p_streak::text, now())

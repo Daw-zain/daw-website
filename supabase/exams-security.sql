@@ -151,8 +151,8 @@ as $$
 declare me public."ExamMember" := public.exam_current_member(); v_admin boolean;
 begin
   if me."id" is null then raise exception 'forbidden' using errcode = '42501'; end if;
-  v_admin := me."role" = 'ADMIN';
-  if not v_admin and not exists (select 1 from public."CourseInstructor" where "memberId" = me."id" and "canViewResults") then
+  v_admin := public.exam_can('audit', 'read');
+  if not v_admin and not exists (select 1 from public."CourseInstructor" where "memberId" = me."id" and "canViewResults" and me."role" <> 'LEARNER') then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   return jsonb_build_object(
@@ -162,7 +162,7 @@ begin
         'course', (select coalesce(p."code", p."titleAr") from public."Program" p where p."id" = l."programId")) x
       from public."ExamAuditLog" l left join public."ExamMember" m on m."id" = l."actorId"
       where l."action" like 'security.%'
-        and (v_admin or l."programId" in (select "programId" from public."CourseInstructor" where "memberId" = me."id" and "canViewResults"))
+        and (v_admin or l."programId" in (select "programId" from public."CourseInstructor" where "memberId" = me."id" and "canViewResults" and me."role" <> 'LEARNER'))
       order by l."createdAt" desc limit least(greatest(coalesce(p_limit, 100), 1), 500)) s),
     'attempts', (select coalesce(jsonb_agg(x order by (x ->> 'warnings')::int desc), '[]'::jsonb) from (
       select jsonb_build_object('attemptId', a."id", 'examId', a."examId", 'warnings', a."warnings", 'status', a."status",
@@ -171,7 +171,7 @@ begin
         'course', (select coalesce(p."code", p."titleAr") from public."Program" p where p."id" = a."programId")) x
       from public."ExamAttempt" a join public."ExamMember" m on m."id" = a."memberId"
       where (a."warnings" > 0 or a."reviewFlag")
-        and (v_admin or a."programId" in (select "programId" from public."CourseInstructor" where "memberId" = me."id" and "canViewResults"))
+        and (v_admin or a."programId" in (select "programId" from public."CourseInstructor" where "memberId" = me."id" and "canViewResults" and me."role" <> 'LEARNER'))
       order by a."warnings" desc limit 100) s));
 end $$;
 

@@ -9,7 +9,12 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/static/supabase";
 import { BASE_PATH, IS_STATIC, withBase } from "@/lib/env-public";
 
-export type Role = "ADMIN" | "INSTRUCTOR" | "LEARNER";
+/** ADMIN = super admin; STAFF = admin whose permissions come from an admin role (supabase/exams.sql) */
+export type Role = "ADMIN" | "STAFF" | "INSTRUCTOR" | "LEARNER";
+/** platform permissions of the signed-in member: { section: [action, …] } */
+export type Platform = Record<string, string[]>;
+export const can = (me: { platform?: Platform }, section: string, action: string) => !!me.platform?.[section]?.includes(action);
+export const isPlatformAdmin = (me: { platform?: Platform }) => Object.keys(me.platform ?? {}).length > 0;
 export type FolderKind = "QUESTION_BANK" | "DOMAIN_TESTS" | "EXAM_SIMULATIONS" | "MISTAKES_QUIZ" | "RESULTS" | "CUSTOM";
 export type EnrollmentStatus = "ACTIVE" | "SUSPENDED" | "COMPLETED";
 
@@ -56,8 +61,10 @@ export type ExamCourse = {
   titleEn: string;
   access: Role;
   permissions: Permissions | null;
+  /** the course is open through the admin role, without a trainer assignment */
+  viaRole?: boolean;
 };
-export type ExamMe = { id: string; email: string; name: string; role: Role; courses: ExamCourse[] };
+export type ExamMe = { id: string; email: string; name: string; role: Role; courses: ExamCourse[]; platform: Platform; adminRole: { nameAr: string; nameEn: string } | null };
 export type ExamFolder = { id: string; kind: FolderKind; system: boolean; nameAr: string; nameEn: string; descAr: string; descEn: string; status: string; count?: number | null };
 export type CoursePeople = {
   instructors: { email: string; name: string }[];
@@ -70,6 +77,8 @@ export type ExamMemberRow = {
   role: Role;
   active: boolean;
   createdAt: string;
+  adminRoleId: string | null;
+  adminRole: { nameAr: string; nameEn: string; active: boolean } | null;
   instructing: ({ programId: string } & Permissions)[];
   enrollments: { programId: string; status: EnrollmentStatus; since: string }[];
 };
@@ -85,6 +94,9 @@ const KNOWN_ERRORS = [
   "course_not_found",
   "invalid_role",
   "invalid_status",
+  "super_admin_only",
+  "invalid_admin_role",
+  "cannot_grant",
   "not_found",
 ] as const;
 export type ExamErrorCode = (typeof KNOWN_ERRORS)[number] | "network" | "unknown";

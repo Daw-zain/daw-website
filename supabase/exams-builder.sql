@@ -193,7 +193,7 @@ begin
   return jsonb_build_object(
     'folder', jsonb_build_object('id', f."id", 'kind', f."kind", 'nameAr', f."nameAr", 'nameEn', f."nameEn", 'programId', f."programId"),
     'canEdit', public.exam_can_edit_exams(p_folder),
-    'canApprove', v_access = 'ADMIN',
+    'canApprove', public.exam_can('exams', 'publish'),
     'exams', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', e."id", 'titleAr', e."titleAr", 'titleEn', e."titleEn", 'descAr', e."descAr", 'descEn', e."descEn",
         'examType', e."examType", 'status', e."status", 'durationMinutes', e."durationMinutes", 'maxAttempts', e."maxAttempts",
@@ -221,7 +221,7 @@ begin
     'check', public.exam_exam_check_json(p_id),
     'canEdit', public.exam_can_edit_exams(e."folderId"),
     'canPublish', public.exam_instructor_can(e."programId", 'canPublishExams'),
-    'canApprove', public.exam_course_access(e."programId") = 'ADMIN');
+    'canApprove', public.exam_can('exams', 'publish'));
 end $$;
 
 -- Create / update a draft exam with its hand-picked questions and random rules (replaced as a whole)
@@ -375,7 +375,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare e public."Exam"; me public."ExamMember" := public.exam_require_admin();
+declare e public."Exam"; me public."ExamMember" := public.exam_require('exams', 'publish');
 begin
   select * into e from public."Exam" where "id" = p_id;
   if e."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;

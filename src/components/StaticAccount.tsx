@@ -6,6 +6,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/static/supabase";
 import { readFavorites } from "@/lib/static/actions";
 import { withBase } from "@/lib/env-public";
+import { isPlatformAdmin, rpc, type ExamMe } from "@/lib/exams/client";
 import { EmptyState, PageHero } from "./ui";
 
 type Labels = {
@@ -16,12 +17,14 @@ type Labels = {
   noFavorites: string;
   knowledge: string;
   exams: string;
+  admin: string;
 };
 
 /** Learner dashboard on the static site: the session lives in the browser (Supabase Auth). */
 export function StaticAccount({ locale, labels, resources }: { locale: string; labels: Labels; resources: { id: string; node: ReactNode }[] }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [favs, setFavs] = useState<string[]>([]);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
     const sb = supabase();
@@ -33,6 +36,8 @@ export function StaticAccount({ locale, labels, resources }: { locale: string; l
       }
       setUser(u);
       setFavs(readFavorites(u.id));
+      // administrators get a shortcut to their dashboard
+      rpc<ExamMe>("exam_me").then((me) => setAdmin(isPlatformAdmin(me))).catch(() => {});
     });
   }, [locale]);
 
@@ -57,6 +62,11 @@ export function StaticAccount({ locale, labels, resources }: { locale: string; l
           <Link href={`/${locale}/exams`} className="btn btn-gold btn-sm">
             {labels.exams}
           </Link>
+          {admin && (
+            <Link href={`/${locale}/manage`} className="btn btn-ghost-light btn-sm">
+              {labels.admin}
+            </Link>
+          )}
           <button type="button" onClick={logout} className="btn btn-ghost-light btn-sm">
             {labels.logout}
           </button>

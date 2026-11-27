@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { courseTitle, useExamSession } from "@/lib/exams/client";
+import { courseTitle, isPlatformAdmin, useExamSession } from "@/lib/exams/client";
 import { EmptyState } from "@/components/ui";
 import { ExamShell, type ExamLabels } from "./ExamShell";
 
@@ -26,9 +26,9 @@ export function ExamsHome({ locale, labels, homeLabel }: { locale: string; label
               <Link href={`/${locale}/exams/analytics`} className="btn btn-outline btn-sm">
                 {labels.analytics.openMine}
               </Link>
-              {me.role === "ADMIN" && (
-                <Link href={`/${locale}/exams/admin`} className="btn btn-primary btn-sm">
-                  {labels.manageMembers}
+              {isPlatformAdmin(me) && (
+                <Link href={`/${locale}/manage`} className="btn btn-primary btn-sm">
+                  {labels.manage.open}
                 </Link>
               )}
             </div>
@@ -47,7 +47,7 @@ export function ExamsHome({ locale, labels, homeLabel }: { locale: string; label
                   >
                     <div className="flex items-start justify-between gap-3">
                       {c.code && <span className="rounded-lg bg-navy px-2.5 py-1 text-xs font-bold tracking-wide text-white" dir="ltr">{c.code}</span>}
-                      <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-semibold text-slate">{labels.access[c.access]}</span>
+                      <span className="rounded-full bg-mist px-2.5 py-1 text-xs font-semibold text-slate">{c.viaRole ? labels.access.STAFF : labels.access[c.access]}</span>
                     </div>
                     <h3 className="mt-4 text-lg font-bold leading-snug text-navy group-hover:text-brand">{courseTitle(c, locale)}</h3>
                     <span className="mt-auto pt-5 text-sm font-semibold text-brand">

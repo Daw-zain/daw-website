@@ -9,6 +9,7 @@ import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { buildBackup } from "../src/lib/backup";
+import { dumpAll } from "./lib/full-backup";
 
 const KEEP = Number(process.env.BACKUP_KEEP || 30);
 
@@ -21,6 +22,8 @@ async function main() {
 
   const data = await buildBackup(db, { includePasswordHashes: true });
   await writeFile(path.join(dir, "database.json"), JSON.stringify(data));
+  // database.json covers the website tables (used by "npm run restore"); full/ holds EVERY table, exams included
+  await dumpAll(db, path.join(dir, "full"));
   const storage = path.join(process.cwd(), "storage");
   if (existsSync(storage)) await cp(storage, path.join(dir, "storage"), { recursive: true });
   await db.$disconnect();

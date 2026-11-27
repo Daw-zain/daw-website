@@ -18,6 +18,7 @@
     "uploads:publish": "node scripts/publish-uploads.mjs",
     "backup": "tsx --env-file-if-exists=.env scripts/backup.ts",
     "restore": "tsx --env-file-if-exists=.env scripts/restore.ts",
+    "backup:full": "tsx --env-file-if-exists=.env scripts/backup-full.ts",
     "mail:test": "tsx --env-file-if-exists=.env scripts/mail-test.ts",
     "admin:reset-password": "tsx --env-file-if-exists=.env scripts/reset-password.ts"
   },
