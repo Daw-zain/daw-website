@@ -9,6 +9,8 @@ import type { TakeInfo } from "@/lib/exams/attempt";
 import { withBase } from "@/lib/env-public";
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
+import { SebGate } from "./Seb";
+import { isSebError } from "@/lib/exams/seb";
 
 /** /[locale]/exams/take?id=… — exam details, rules, start / resume, my attempts */
 export function ExamTakePage(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -47,6 +49,11 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
       const r = await rpc<{ attemptId: string }>("exam_attempt_start", { p_exam: id });
       go(r.attemptId);
     } catch (e) {
+      if (isSebError(e)) {
+        setInfo((x) => x && { ...x, seb: { required: true, ok: false } });
+        setBusy(false);
+        return;
+      }
       const m = e instanceof ExamError ? e.message : "";
       const reason = m.match(/cannot_start: (\w+)/)?.[1];
       setErr(reason ? (tk.reasons as Record<string, string>)[reason] ?? labels.errorGeneric : labels.errorGeneric);
@@ -91,6 +98,8 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                 )}
               </div>
 
+              {info.seb?.required && !info.seb.ok && (info.openAttemptId || info.canStart) && <SebGate locale={locale} labels={labels} />}
+
               <div className="card p-6">
                 <h2 className="text-lg font-bold text-navy">{tk.rulesTitle}</h2>
                 <ul className="mt-3 list-inside list-disc space-y-1.5 text-sm leading-7 text-ink">
@@ -99,7 +108,7 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                   {(info.security as { detectBlur?: boolean })?.detectBlur && <li>{labels.proctor.monitoredRule}</li>}
                   {(info.security as { watermark?: boolean })?.watermark && <li>{labels.proctor.watermarkRule}</li>}
                 </ul>
-                {info.openAttemptId ? (
+                {info.seb?.required && !info.seb.ok && (info.openAttemptId || info.canStart) ? null : info.openAttemptId ? (
                   <button type="button" onClick={() => go(info.openAttemptId!)} className="btn btn-primary mt-5">{tk.resume}</button>
                 ) : info.canStart ? (
                   <>

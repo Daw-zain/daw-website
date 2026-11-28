@@ -536,6 +536,16 @@ model ExamFolder {
   @@index([parentId])
 }
 
+// Safe Exam Browser: one row ("main"). The switch stays off until the configuration was tried on a real device.
+model SebSetting {
+  id          String   @id
+  enabled     Boolean  @default(false)
+  configKeys  String[] @default([]) // accepted Config Keys (SHA-256, hex)
+  siteUrl     String   @default("") // pages SEB may sign: this site's address
+  updatedById String?
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
 model ExamAuditLog {
   id        String   @id @default(dbgenerated("gen_random_uuid()::text"))
   actorId   String? // ExamMember.id
@@ -742,6 +752,7 @@ model Exam {
   allowWhiteboard   Boolean    @default(false)
   allowTranslation  Boolean    @default(true)
   resumePolicy      String     @default("RESUME") // RESUME (timer keeps running) | NO_RESUME
+  requireSeb        Boolean    @default(true) // trainees need Safe Exam Browser (when the general switch is on)
   security          Json       @default("{}") // {fullscreen, detectBlur, maxWarnings, onExceed: WARN|SUBMIT|REVIEW, watermark, blockCopy}
   status            String     @default("DRAFT") // DRAFT | PENDING_APPROVAL | PUBLISHED | STOPPED | ARCHIVED
   reviewNote        String     @default("") // admin note when sending back to draft

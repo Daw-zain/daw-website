@@ -9,6 +9,8 @@ import { QUESTION_TYPES } from "@/lib/exams/bank";
 import { MISTAKE_STATUSES, type MistakeDetail, type MistakeSession, type MistakesOverview, type MistakesReport, type MistakeStatus, type Reveal } from "@/lib/exams/mistakes";
 import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
+import { SebGate } from "./Seb";
+import { isSebError } from "@/lib/exams/seb";
 import { AnswerInput, AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { answerText } from "./AttemptReviewPage";
 import { HotspotAnswer } from "./AdvancedQuestions";
@@ -88,6 +90,7 @@ function Mine({ course, locale, labels, onSession }: { course: ExamCourse; local
   const [data, setData] = useState<MistakesOverview | null>(null);
   const [failed, setFailed] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sebBlocked, setSebBlocked] = useState(false);
   const [opts, setOpts] = useState({ count: 10, random: true, minutes: "", feedbackMode: "AFTER_ANSWER", includeMastered: false });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -109,11 +112,13 @@ function Mine({ course, locale, labels, onSession }: { course: ExamCourse; local
       });
       onSession(r.sessionId);
     } catch (e) {
-      setErr(e instanceof ExamError && /no_mistakes/.test(e.message) ? mk.noMistakes : labels.errorGeneric);
+      if (isSebError(e)) setSebBlocked(true);
+      else setErr(e instanceof ExamError && /no_mistakes/.test(e.message) ? mk.noMistakes : labels.errorGeneric);
       setBusy(false);
     }
   };
 
+  if (sebBlocked) return <SebGate locale={locale} labels={labels} />;
   if (failed) return <Notice tone="error">{labels.errorGeneric}</Notice>;
   if (!data) return <Spinner />;
   const c = data.counts;
@@ -320,14 +325,16 @@ function SessionView({ id, locale, labels, onClose }: { id: string; locale: stri
   const [busy, setBusy] = useState(false);
   const [offset, setOffset] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const [sebBlocked, setSebBlocked] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const x = await rpc<MistakeSession>("exam_mistakes_state", { p_session: id });
       setOffset(utcDate(x.serverNow)!.getTime() - Date.now());
       setS(x);
-    } catch {
-      setFailed(true);
+    } catch (e) {
+      if (isSebError(e)) setSebBlocked(true);
+      else setFailed(true);
     }
   }, [id]);
   useEffect(() => {
@@ -346,6 +353,7 @@ function SessionView({ id, locale, labels, onClose }: { id: string; locale: stri
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reload once when the clock reaches zero
   }, [left !== null && left <= 0]);
 
+  if (sebBlocked) return <SebGate locale={locale} labels={labels} />;
   if (failed) return <Notice tone="error">{labels.errorGeneric}</Notice>;
   if (!s) return <Spinner />;
 

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { QuestionPreview } from "./QuestionPreview";
 import { statusClass } from "./ExamFolderPage";
+import { SebExamToggle } from "./Seb";
 
 const Field = ({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) => (
   <label className={`block text-sm ${className}`}>
@@ -400,6 +401,8 @@ function Builder({ initial, course, locale, labels }: { initial: ExamFull; cours
           </div>
         </Section>
       </fieldset>
+
+      {e.id && (e.canPublish || e.canApprove) && <SebExamToggle key={e.id} examId={e.id} initial={e.requireSeb ?? true} locale={locale} labels={labels} />}
 
       {/* actions */}
       <div className="card flex flex-wrap items-center gap-3 p-5">

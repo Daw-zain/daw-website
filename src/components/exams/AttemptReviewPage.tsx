@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { ExamShell, Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { HotspotAnswer } from "./AdvancedQuestions";
+import { SebQuit } from "./Seb";
 
 /** /[locale]/exams/review?id=… — result and (if the exam allows) question-by-question review */
 export function AttemptReviewPage(props: { locale: string; labels: ExamLabels; homeLabel: string }) {
@@ -60,6 +61,7 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                 </>
               ) : <div className="mt-3"><Notice>{r.hidden}</Notice></div>}
               <Link href={`/${locale}/exams/take?id=${encodeURIComponent(rv.examId)}`} className="btn btn-outline btn-sm mt-5">{r.backToExam}</Link>
+              <span className="ms-3 inline-block"><SebQuit labels={labels} /></span>
             </div>
 
             {rv.resultsVisible && !rv.reviewVisible && <Notice>{r.noReview}</Notice>}

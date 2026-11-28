@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>allowQuit</key><true/><key>browserWindowWebView</key><integer>3</integer><key>quitURL</key><string>https://daw-zain.github.io/daw-website/seb/quit.html</string><key>quitURLConfirm</key><false/><key>sendBrowserExamKey</key><true/><key>startURL</key><string>https://daw-zain.github.io/daw-website/ar/exams/</string></dict></plist>

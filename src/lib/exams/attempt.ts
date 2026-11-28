@@ -76,6 +76,8 @@ export type TakeInfo = {
   canStart: boolean;
   reason: string | null;
   openAttemptId: string | null;
+  /** Safe Exam Browser: required for this member, and accepted in this window */
+  seb?: { required: boolean; ok: boolean };
   attempts: { id: string; attemptNo: number; status: AttemptStatus; startedAt: string; submittedAt: string | null; resultsVisible: boolean; reviewVisible: boolean; score: number | null; maxScore: number | null; percent: number | null; passed: boolean | null; needsManual: boolean }[];
 };
 

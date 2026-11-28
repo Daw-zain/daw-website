@@ -26,6 +26,9 @@ export function ExamsHome({ locale, labels, homeLabel }: { locale: string; label
               <Link href={`/${locale}/exams/analytics`} className="btn btn-outline btn-sm">
                 {labels.analytics.openMine}
               </Link>
+              <Link href={`/${locale}/exams/seb`} className="btn btn-outline btn-sm">
+                {labels.seb.pageTitle}
+              </Link>
               {isPlatformAdmin(me) && (
                 <Link href={`/${locale}/manage`} className="btn btn-primary btn-sm">
                   {labels.manage.open}

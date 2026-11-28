@@ -226,6 +226,7 @@ begin
   if me."id" is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
   perform public.exam_rate_hit('mistakes_start', 10);
   if public.exam_course_access(p_program) is null then raise exception 'forbidden' using errcode = '42501'; end if;
+  perform public.exam_seb_guard(p_program);
   select "id" into v_open from public."MistakeSession" where "memberId" = me."id" and "programId" = p_program and "status" = 'IN_PROGRESS' limit 1;
   if v_open is not null then return jsonb_build_object('sessionId', v_open, 'resumed', true); end if;
 
@@ -328,6 +329,7 @@ as $$
 declare s public."MistakeSession" := public.exam_own_session(p_session);
 begin
   perform public.exam_rate_hit('mistakes', 60);
+  if s."status" = 'IN_PROGRESS' then perform public.exam_seb_guard(s."programId"); end if;
   return jsonb_build_object(
     'id', s."id", 'programId', s."programId", 'status', s."status", 'feedbackMode', s."feedbackMode", 'serverNow', now(), 'deadlineAt', s."deadlineAt",
     'questionCount', s."questionCount", 'correctCount', s."correctCount", 'score', s."score", 'maxScore', s."maxScore",
@@ -350,6 +352,7 @@ declare s public."MistakeSession" := public.exam_own_session(p_session); q publi
 begin
   perform public.exam_rate_hit('mistakes_answer', 120);
   if s."status" <> 'IN_PROGRESS' then raise exception 'session_closed' using errcode = '42501'; end if;
+  perform public.exam_seb_guard(s."programId");
   select * into q from public."MistakeSessionQuestion" where "id" = p_question and "sessionId" = p_session;
   if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   if q."isCorrect" is not null then raise exception 'already_answered' using errcode = '42501'; end if;

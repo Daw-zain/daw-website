@@ -11,6 +11,8 @@ import { Notice, Spinner, type ExamLabels } from "./ExamShell";
 import { AnswerInput, AttemptScenarioView, QuestionMedia } from "./AnswerInput";
 import { Calculator, FloatingPanel, Whiteboard } from "./ExamTools";
 import { proctorSuppressed, type ProctorKind, type ProctorResult } from "@/lib/exams/proctor";
+import { SebGate } from "./Seb";
+import { isSebError } from "@/lib/exams/seb";
 
 const TEXT_TYPES = new Set(["SHORT", "ESSAY", "NUMERIC", "CLOZE"]);
 
@@ -28,6 +30,8 @@ function Inner({ locale, labels }: { locale: string; labels: ExamLabels }) {
   const { state: session } = useExamSession(locale);
   const [st, setSt] = useState<AttemptState | null>(null);
   const [failed, setFailed] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const block = useCallback(() => setBlocked(true), []);
   const at = labels.attempt;
 
   const toReview = useCallback(() => window.location.replace(withBase(`/${locale}/exams/review/?id=${encodeURIComponent(id)}`)), [locale, id]);
@@ -36,16 +40,17 @@ function Inner({ locale, labels }: { locale: string; labels: ExamLabels }) {
     if (session.status !== "ready" || !id) return;
     rpc<AttemptState>("exam_attempt_state", { p_attempt: id })
       .then((s) => (s.status === "IN_PROGRESS" ? setSt(s) : toReview()))
-      .catch(() => setFailed(true));
+      .catch((e) => (isSebError(e) ? setBlocked(true) : setFailed(true)));
   }, [session.status, id, toReview]);
 
   if (session.status === "server") return <div className="container-x py-12"><Notice>{labels.serverNotice}</Notice></div>;
+  if (blocked) return <div className="container-x max-w-3xl py-12"><SebGate locale={locale} labels={labels} /></div>;
   if (failed) return <div className="container-x py-12"><Notice tone="error">{labels.course.notFound}</Notice></div>;
   if (!st) return <Spinner />;
-  return <Exam initial={st} locale={locale} labels={labels} onClosed={toReview} at={at} />;
+  return <Exam initial={st} locale={locale} labels={labels} onClosed={toReview} onBlocked={block} at={at} />;
 }
 
-function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState; locale: string; labels: ExamLabels; onClosed: () => void; at: ExamLabels["attempt"] }) {
+function Exam({ initial, locale, labels, onClosed, onBlocked, at }: { initial: AttemptState; locale: string; labels: ExamLabels; onClosed: () => void; onBlocked: () => void; at: ExamLabels["attempt"] }) {
   const ar = locale === "ar";
   const qs = initial.questions;
   const [idx, setIdx] = useState(0);
@@ -154,6 +159,10 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
           await rpc("exam_attempt_save", { p_attempt: initial.id, p_question: qid, p_response: v.response, p_flagged: v.flagged });
           if (pending.current.get(qid) === v) pending.current.delete(qid);
         } catch (e) {
+          if (isSebError(e)) {
+            onBlocked();
+            return;
+          }
           if (e instanceof ExamError && e.code !== "network" && /attempt_closed/.test(e.message)) {
             pending.current.clear();
             onClosed();
@@ -169,7 +178,7 @@ function Exam({ initial, locale, labels, onClosed, at }: { initial: AttemptState
     } finally {
       flushing.current = false;
     }
-  }, [initial.id, onClosed]);
+  }, [initial.id, onClosed, onBlocked]);
 
   // retry while offline + clock tick
   useEffect(() => {

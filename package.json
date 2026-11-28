@@ -20,6 +20,7 @@
     "restore": "tsx --env-file-if-exists=.env scripts/restore.ts",
     "backup:full": "tsx --env-file-if-exists=.env scripts/backup-full.ts",
     "mail:test": "tsx --env-file-if-exists=.env scripts/mail-test.ts",
+    "seb:config": "tsx --env-file-if-exists=.env scripts/seb-config.ts",
     "admin:reset-password": "tsx --env-file-if-exists=.env scripts/reset-password.ts"
   },
   "prisma": {

@@ -426,6 +426,9 @@ begin
     'questionCount', (public.exam_exam_check_json(e."id") ->> 'questionCount')::int,
     'tools', jsonb_build_object('calculator', e."allowCalculator", 'whiteboard', e."allowWhiteboard", 'translation', e."allowTranslation"),
     'security', e."security", 'resumePolicy', e."resumePolicy", 'reviewPolicy', e."reviewPolicy", 'resultsPolicy', e."resultsPolicy",
+    -- Safe Exam Browser: must this member use it, and is this window accepted
+    'requireSeb', e."requireSeb",
+    'seb', jsonb_build_object('required', public.exam_seb_required(e."programId", e."id"), 'ok', public.exam_seb_proof()),
     'attemptsUsed', v_used, 'attemptsAllowed', v_allowed, 'canStart', v_reason is null, 'reason', v_reason,
     'openAttemptId', v_open."id",
     'attempts', (select coalesce(jsonb_agg(jsonb_build_object(
@@ -453,6 +456,7 @@ declare
   v_deadline timestamptz; rw record; v_pos int := 0; v_snap jsonb; v_imgs jsonb; v_scen jsonb := '{}'::jsonb; v_sid text;
 begin
   perform public.exam_rate_hit('attempt_start', 10);
+  perform public.exam_seb_guard(info ->> 'programId', p_exam);
   if info ->> 'reason' = 'in_progress' then
     return jsonb_build_object('attemptId', info ->> 'openAttemptId', 'resumed', true);
   end if;
@@ -552,6 +556,8 @@ begin
   select * into a from public."ExamAttempt" where "id" = p_attempt;
   select * into e from public."Exam" where "id" = a."examId";
   if a."status" = 'IN_PROGRESS' then
+    -- the questions leave the server only towards Safe Exam Browser (when it is required)
+    perform public.exam_seb_guard(a."programId", a."examId");
     update public."ExamAttempt" set "lastSeenAt" = now() where "id" = p_attempt;
   end if;
   return jsonb_build_object(
@@ -580,6 +586,7 @@ begin
   perform public.exam_attempt_enforce_time(p_attempt);
   select * into a from public."ExamAttempt" where "id" = p_attempt;
   if a."status" <> 'IN_PROGRESS' then raise exception 'attempt_closed' using errcode = '42501'; end if;
+  perform public.exam_seb_guard(a."programId", a."examId");
   select * into q from public."AttemptQuestion" where "id" = p_question and "attemptId" = p_attempt;
   if q."id" is null then raise exception 'not_found' using errcode = 'P0002'; end if;
   if not coalesce(public.exam_response_ok(q."publicData", p_response), false) then raise exception 'invalid_response' using errcode = '22023'; end if;

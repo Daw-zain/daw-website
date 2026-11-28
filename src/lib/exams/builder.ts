@@ -61,6 +61,8 @@ export type ExamFull = {
   allowCalculator: boolean;
   allowWhiteboard: boolean;
   allowTranslation: boolean;
+  /** saved on its own (exam_seb_set_exam), not by the exam form */
+  requireSeb?: boolean;
   resumePolicy: "RESUME" | "NO_RESUME";
   security: Security;
   status: ExamStatus;
