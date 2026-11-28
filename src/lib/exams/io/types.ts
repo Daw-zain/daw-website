@@ -4,9 +4,9 @@
  */
 import type { Difficulty, Figure, QuestionAnswer, QuestionContent, QuestionType, ScoringMode } from "../bank";
 
-export const IMPORT_FORMATS = ["moodle", "gift", "aiken", "json", "csv", "xlsx"] as const;
+export const IMPORT_FORMATS = ["moodle", "gift", "aiken", "json", "csv", "xlsx", "pdf"] as const;
 export type ImportFormat = (typeof IMPORT_FORMATS)[number];
-export const EXPORT_FORMATS = ["moodle", "json", "gift", "aiken", "csv"] as const;
+export const EXPORT_FORMATS = ["moodle", "json", "gift", "aiken", "csv", "pdf"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 /** which of our types each format can carry (import and export). "Don't claim types a format doesn't support." */
@@ -17,6 +17,7 @@ export const FORMAT_TYPES: Record<ImportFormat | ExportFormat, QuestionType[]> =
   json: ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING", "MATCHING", "HOTSPOT", "DRAGDROP", "CLOZE"],
   csv: ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING"],
   xlsx: ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING"],
+  pdf: ["MCQ", "MULTI", "TRUE_FALSE", "NUMERIC", "SHORT", "ESSAY", "ORDERING"],
 };
 
 export type ImportScenario = {
@@ -58,7 +59,8 @@ export type ImportFile = { name: string; mime: string; base64: string; captionAr
 export type ParsedQuestion = { q: ImportQuestion; source: string; warnings: string[]; files: ImportFile[] };
 /** a part of the file that could not become a question, and why (key into labels + detail) */
 export type ParseIssue = { source: string; reason: string; detail?: string };
-export type ParseResult = { questions: ParsedQuestion[]; issues: ParseIssue[] };
+/** `text`: what was read from a PDF, shown so the reader can compare it with the file */
+export type ParseResult = { questions: ParsedQuestion[]; issues: ParseIssue[]; text?: string };
 
 /** what the export function returns per question (full question + names + files list) */
 export type ExportQuestion = ImportQuestion & {

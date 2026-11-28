@@ -1,10 +1,14 @@
 /** Phase 11 — one entry point for reading and writing question files. */
 import { exportAiken, exportGift, parseAiken, parseGift } from "./gift";
 import { exportMoodle, parseMoodle } from "./moodle";
+import { exportPdf, type PdfAnswers } from "./pdf-export";
+import { parseQuestionLines } from "./pdf-questions";
+import { readPdfLines } from "./pdf-text";
 import { csvTemplate, exportCsv, exportJson, JSON_FORMAT, parseCsvRows, parseJsonQuestions, readXlsx, rowsToQuestions } from "./tabular";
 import type { ExportFormat, ExportQuestion, ExportResult, ImportFormat, ParseResult, TextLang } from "./types";
 
 export * from "./types";
+export type { PdfAnswers } from "./pdf-export";
 
 export const MAX_IMPORT_BYTES = 15 * 1024 * 1024;
 
@@ -12,6 +16,7 @@ export const MAX_IMPORT_BYTES = 15 * 1024 * 1024;
 export function detectFormat(name: string, head = ""): ImportFormat {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "xlsx") return "xlsx";
+  if (ext === "pdf" || head.startsWith("%PDF-")) return "pdf";
   if (ext === "csv" || ext === "tsv") return "csv";
   if (ext === "json") return "json";
   if (ext === "xml") return "moodle";
@@ -41,10 +46,18 @@ export async function parseFile(format: ImportFormat, data: { text?: string; buf
       } catch (e) {
         return { questions: [], issues: [{ source: "file", reason: (e as Error).message === "file_too_large" ? "file_too_large" : "not_xlsx" }] };
       }
+    case "pdf":
+      try {
+        const read = await readPdfLines(data.buffer ?? new ArrayBuffer(0));
+        if (!read.some((l) => l.trim())) return { questions: [], issues: [{ source: "file", reason: "pdf_no_text" }] };
+        return { ...parseQuestionLines(read, lang), text: read.join("\n") };
+      } catch (e) {
+        return { questions: [], issues: [{ source: "file", reason: (e as Error).message }] };
+      }
   }
 }
 
-export function exportAs(format: ExportFormat, qs: ExportQuestion[], lang: "ar" | "en", files: Record<string, string>, course?: { code?: string | null; title?: string }): ExportResult {
+export function exportAs(format: ExportFormat, qs: ExportQuestion[], lang: "ar" | "en", files: Record<string, string>, course?: { code?: string | null; title?: string }, pdfAnswers?: PdfAnswers): ExportResult {
   switch (format) {
     case "moodle":
       return exportMoodle(qs, lang, files);
@@ -56,6 +69,8 @@ export function exportAs(format: ExportFormat, qs: ExportQuestion[], lang: "ar" 
       return exportAiken(qs, lang);
     case "csv":
       return exportCsv(qs);
+    case "pdf":
+      return exportPdf(qs, lang, files, course, pdfAnswers);
   }
 }
 

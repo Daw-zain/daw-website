@@ -12,7 +12,16 @@
 -- 1. Lock everything: no default access for browser roles, row-level security on every table.
 revoke all on all tables in schema public from anon, authenticated;
 revoke all on all sequences in schema public from anon, authenticated;
-revoke all on all functions in schema public from anon, authenticated;
+-- only the app's own functions: a revoke on "all functions" stops with an error at "rls_auto_enable", which
+-- belongs to the database owner and is locked by lms-owner.sql
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as sig from pg_proc p
+           where p.pronamespace = 'public'::regnamespace and pg_get_userbyid(p.proowner) = current_user loop
+    execute format('revoke all on function %s from anon, authenticated', f.sig);
+  end loop;
+end $$;
 alter default privileges in schema public revoke all on tables from anon, authenticated;
 alter default privileges in schema public revoke all on sequences from anon, authenticated;
 alter default privileges in schema public revoke all on functions from anon, authenticated;

@@ -325,16 +325,21 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object(
       'id', f."id", 'kind', f."kind", 'system', f."system", 'nameAr', f."nameAr", 'nameEn', f."nameEn",
       'descAr', f."descAr", 'descEn', f."descEn", 'status', f."status",
+      -- sub-folders are opened from inside their folder
+      'folders', (select count(*) from public."ExamFolder" c where c."parentId" = f."id"
+                    and (v_access in ('ADMIN', 'INSTRUCTOR') or c."status" = 'ACTIVE')),
       -- staff see how many questions the bank holds (phase 3); learners never see the bank folder
       'count', case when f."kind" = 'QUESTION_BANK' and v_access in ('ADMIN', 'INSTRUCTOR')
                     then (select count(*) from public."Question" q where q."programId" = p_program)
                     -- phase 5: exams in the folder (learners: published only)
                     when f."kind" in ('DOMAIN_TESTS', 'EXAM_SIMULATIONS', 'CUSTOM')
-                    then (select count(*) from public."Exam" x where x."folderId" = f."id"
-                            and (v_access in ('ADMIN', 'INSTRUCTOR') or x."status" = 'PUBLISHED')) end
+                    then (select count(*) from public."Exam" x
+                            join public."ExamFolder" d on d."id" = x."folderId"
+                            where (d."id" = f."id" or d."parentId" = f."id")
+                            and (v_access in ('ADMIN', 'INSTRUCTOR') or (x."status" = 'PUBLISHED' and d."status" = 'ACTIVE'))) end
       ) order by f."sortOrder", f."createdAt"), '[]'::jsonb)
     from public."ExamFolder" f
-    where f."programId" = p_program
+    where f."programId" = p_program and f."parentId" is null
       and (v_access in ('ADMIN', 'INSTRUCTOR')
            or (f."status" = 'ACTIVE' and f."kind" in ('DOMAIN_TESTS', 'EXAM_SIMULATIONS', 'MISTAKES_QUIZ', 'RESULTS')))
   );

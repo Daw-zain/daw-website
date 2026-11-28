@@ -28,6 +28,7 @@ import {
   type ImportFormat,
   type ParsedQuestion,
   type ParseIssue,
+  type PdfAnswers,
   type TextLang,
 } from "@/lib/exams/io";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,33 @@ function download(name: string, text: string | Blob, mime: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** opens the browser's print window for a ready page; the reader saves it as PDF */
+function printPage(html: string, name: string) {
+  document.getElementById("bank-print")?.remove();
+  const frame = document.createElement("iframe");
+  frame.id = "bank-print";
+  frame.setAttribute("aria-hidden", "true");
+  frame.tabIndex = -1;
+  frame.style.cssText = "position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0";
+  frame.onload = async () => {
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument;
+    if (!win || !doc?.body?.childElementCount) return;
+    await Promise.all([...doc.images].map((img) => img.decode().catch(() => undefined)));
+    await doc.fonts.ready;
+    // the suggested file name comes from the page title
+    const before = document.title;
+    const restore = () => (document.title = before);
+    document.title = name;
+    win.addEventListener("afterprint", restore, { once: true });
+    win.focus();
+    win.print();
+    setTimeout(restore, 60_000);
+  };
+  frame.srcdoc = html;
+  document.body.appendChild(frame);
 }
 
 /** "invalid_question: correct_unknown_option" → label text */
@@ -144,7 +172,7 @@ function ImportPanel({ programId, categories, canCategories, onImported, locale,
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<{ questions: ParsedQuestion[]; issues: ParseIssue[]; format: ImportFormat } | null>(null);
+  const [parsed, setParsed] = useState<{ questions: ParsedQuestion[]; issues: ParseIssue[]; format: ImportFormat; text?: string } | null>(null);
   const [check, setCheck] = useState<CheckResult | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [open, setOpen] = useState<number | null>(null);
@@ -170,7 +198,7 @@ function ImportPanel({ programId, categories, canCategories, onImported, locale,
     try {
       const head = file.name.toLowerCase().endsWith(".xlsx") ? "" : (await file.slice(0, 4000).text());
       const fmt = format || detectFormat(file.name, head);
-      const data = fmt === "xlsx" ? { buffer: await file.arrayBuffer() } : { text: await file.text() };
+      const data = fmt === "xlsx" || fmt === "pdf" ? { buffer: await file.arrayBuffer() } : { text: await file.text() };
       const res = await parseFile(fmt, data, lang);
       setParsed({ ...res, format: fmt });
       if (!res.questions.length) return;
@@ -262,7 +290,7 @@ function ImportPanel({ programId, categories, canCategories, onImported, locale,
               <span className="field-label">{t.file}</span>
               <input
                 type="file"
-                accept=".xml,.gift,.txt,.json,.csv,.tsv,.xlsx"
+                accept=".xml,.gift,.txt,.json,.csv,.tsv,.xlsx,.pdf"
                 onChange={(e) => {
                   setFile(e.target.files?.[0] ?? null);
                   reset();
@@ -315,6 +343,11 @@ function ImportPanel({ programId, categories, canCategories, onImported, locale,
             </details>
           </div>
           <p className="text-xs text-slate">{t.supportHint}</p>
+          <details className="text-sm">
+            <summary className="cursor-pointer font-semibold text-brand">{t.pdfHelp}</summary>
+            <p className="mt-2 text-xs text-slate">{t.pdfHelpNote}</p>
+            <pre dir="auto" className="mt-2 whitespace-pre-wrap rounded-xl bg-mist p-3 font-sans text-xs leading-6 text-navy">{t.pdfExample}</pre>
+          </details>
         </>
       )}
 
@@ -340,6 +373,13 @@ function ImportPanel({ programId, categories, canCategories, onImported, locale,
                   <li key={i}><span dir="ltr" className="font-mono text-xs text-slate">{x.source}</span> — {(t.reasons as Record<string, string>)[x.reason] ?? x.reason}{x.detail ? ` (${x.detail})` : ""}</li>
                 ))}
               </ul>
+            </details>
+          )}
+
+          {parsed.text && (
+            <details className="rounded-xl border border-line p-3 text-sm">
+              <summary className="cursor-pointer font-semibold text-brand">{t.rawText}</summary>
+              <pre dir="auto" className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap font-sans text-xs leading-6 text-slate">{parsed.text}</pre>
             </details>
           )}
 
@@ -433,10 +473,11 @@ function ExportPanel({ programId, courseCode, categories, selectedIds, onClearSe
   const [format, setFormat] = useState<ExportFormat>("moodle");
   const [lang, setLang] = useState<"ar" | "en">(locale === "en" ? "en" : "ar");
   const [withFiles, setWithFiles] = useState(true);
+  const [pdfAnswers, setPdfAnswers] = useState<PdfAnswers>("inline");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ exported: number; skipped: { id: string; type: string; reason: string }[]; filesSkipped: number } | null>(null);
-  const filesOk = format === "moodle" || format === "json";
+  const filesOk = format === "moodle" || format === "json" || format === "pdf";
   const oneLang = format !== "json" && format !== "csv";
 
   const run = async () => {
@@ -470,8 +511,12 @@ function ExportPanel({ programId, courseCode, categories, selectedIds, onClearSe
           }
         }
       }
-      const out = exportAs(format, questions, lang, files, { code: courseCode });
-      if (out.exported > 0) download(`${courseCode || "bank"}-questions-${new Date().toISOString().slice(0, 10)}.${out.ext}`, out.text, out.mime);
+      const out = exportAs(format, questions, lang, files, { code: courseCode }, pdfAnswers);
+      const name = `${courseCode || "bank"}-questions-${new Date().toISOString().slice(0, 10)}`;
+      if (out.exported > 0) {
+        if (format === "pdf") printPage(out.text, name);
+        else download(`${name}.${out.ext}`, out.text, out.mime);
+      }
       setResult({ exported: out.exported, skipped: out.skipped, filesSkipped });
     } catch (e) {
       setError(reasonText((e as Error).message, labels) || labels.errorGeneric);
@@ -532,6 +577,14 @@ function ExportPanel({ programId, courseCode, categories, selectedIds, onClearSe
       <p className="rounded-xl bg-mist px-4 py-3 text-sm text-slate">
         {t.typesIn.replace("{f}", t.formats[format])}: {FORMAT_TYPES[format].map((x) => b.types[x]).join("، ")}. {t.formatNotes[format]}
       </p>
+      {format === "pdf" && (
+        <label className="block text-sm sm:max-w-md">
+          <span className="field-label">{t.pdfAnswers}</span>
+          <select value={pdfAnswers} onChange={(e) => { setPdfAnswers(e.target.value as PdfAnswers); setResult(null); }} className="field">
+            {(["inline", "end", "none"] as const).map((m) => <option key={m} value={m}>{t.pdfAnswerModes[m]}</option>)}
+          </select>
+        </label>
+      )}
       {filesOk && (
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={withFiles} onChange={(e) => setWithFiles(e.target.checked)} className="h-4 w-4 accent-[var(--color-brand)]" />{t.withFiles}</label>
       )}
@@ -541,7 +594,7 @@ function ExportPanel({ programId, courseCode, categories, selectedIds, onClearSe
       {result && (
         <div className="space-y-2">
           <Notice tone={result.exported ? "success" : "error"}>
-            {result.exported ? t.exportedN.replace("{n}", String(result.exported)) : t.nothingExported}
+            {result.exported ? (format === "pdf" ? `${t.printedN.replace("{n}", String(result.exported))} ${t.printHint}` : t.exportedN.replace("{n}", String(result.exported))) : t.nothingExported}
             {result.filesSkipped > 0 && ` · ${t.filesSkipped.replace("{n}", String(result.filesSkipped))}`}
           </Notice>
           {result.skipped.length > 0 && (

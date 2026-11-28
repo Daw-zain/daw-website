@@ -67,7 +67,7 @@ export type ExamCourse = {
   viaRole?: boolean;
 };
 export type ExamMe = { id: string; email: string; name: string; role: Role; courses: ExamCourse[]; platform: Platform; adminRole: { nameAr: string; nameEn: string } | null };
-export type ExamFolder = { id: string; kind: FolderKind; system: boolean; nameAr: string; nameEn: string; descAr: string; descEn: string; status: string; count?: number | null };
+export type ExamFolder = { id: string; kind: FolderKind; system: boolean; nameAr: string; nameEn: string; descAr: string; descEn: string; status: string; count?: number | null; folders?: number };
 export type CoursePeople = {
   instructors: { email: string; name: string }[];
   learners: { email: string; name: string; status: EnrollmentStatus; since: string }[];

@@ -51,6 +51,7 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
         { href: `/${locale}`, label: homeLabel },
         { href: `/${locale}/exams`, label: labels.title },
         ...(course ? [{ href: `/${locale}/exams/course?id=${encodeURIComponent(course.programId)}`, label: course.code ?? courseTitle(course, locale) }] : []),
+        ...(data?.parent ? [{ href: `/${locale}/exams/folder?id=${encodeURIComponent(data.parent.id)}`, label: ar ? data.parent.nameAr : data.parent.nameEn }] : []),
         { label: folderName || "…" },
       ]}
     >
@@ -62,8 +63,8 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
         ) : (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Link href={`/${locale}/exams/course?id=${encodeURIComponent(data.folder.programId)}`} className="text-sm font-semibold text-brand hover:underline">
-                {ar ? "→" : "←"} {labels.bank.back}
+              <Link href={data.parent ? `/${locale}/exams/folder?id=${encodeURIComponent(data.parent.id)}` : `/${locale}/exams/course?id=${encodeURIComponent(data.folder.programId)}`} className="text-sm font-semibold text-brand hover:underline">
+                {ar ? "→" : "←"} {data.parent ? (ar ? data.parent.nameAr : data.parent.nameEn) : labels.bank.back}
               </Link>
               {data.canEdit && (
                 <Link href={`/${locale}/exams/exam?folder=${encodeURIComponent(data.folder.id)}`} className="btn btn-primary btn-sm">
@@ -71,8 +72,32 @@ function Inner({ locale, labels, homeLabel }: { locale: string; labels: ExamLabe
                 </Link>
               )}
             </div>
+            {!!data.folders?.length && (
+              <section aria-label={bl.subFolders}>
+                <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.folders.map((f) => (
+                    <li key={f.id}>
+                      <Link href={`/${locale}/exams/folder?id=${encodeURIComponent(f.id)}`} className={cn("card flex h-full items-center gap-3 p-5 transition hover:border-brand", f.status !== "ACTIVE" && "opacity-60")}>
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                            <path d="M3 7h6l2 2h10v10H3z" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-bold leading-snug text-navy">{ar ? f.nameAr : f.nameEn || f.nameAr}</span>
+                          <span className="block text-sm text-slate">{f.count} {bl.exams}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                {data.exams.length > 0 && <h2 className="mt-8 text-xl font-bold">{bl.folderExams}</h2>}
+              </section>
+            )}
             {data.exams.length === 0 ? (
+              data.folders?.length ? null : (
               <p className="rounded-2xl border border-dashed border-line bg-mist/60 px-6 py-10 text-center text-slate">{staff ? bl.noExams : bl.noPublished}</p>
+              )
             ) : (
               <ul className="grid gap-4 md:grid-cols-2">
                 {data.exams.map((e) => (

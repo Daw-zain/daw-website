@@ -188,11 +188,21 @@ begin
   select * into f from public."ExamFolder" where "id" = p_folder;
   if f."id" is null or f."kind" not in ('DOMAIN_TESTS', 'EXAM_SIMULATIONS', 'CUSTOM') then raise exception 'not_found' using errcode = 'P0002'; end if;
   v_access := public.exam_course_access(f."programId");
-  if v_access is null or (v_access = 'LEARNER' and f."status" <> 'ACTIVE') then
+  -- a learner cannot open a hidden folder, nor a sub-folder of a hidden one
+  if v_access is null or (v_access = 'LEARNER' and (f."status" <> 'ACTIVE'
+      or exists (select 1 from public."ExamFolder" p where p."id" = f."parentId" and p."status" <> 'ACTIVE'))) then
     raise exception 'forbidden' using errcode = '42501';
   end if;
   return jsonb_build_object(
     'folder', jsonb_build_object('id', f."id", 'kind', f."kind", 'nameAr', f."nameAr", 'nameEn', f."nameEn", 'programId', f."programId"),
+    'parent', (select jsonb_build_object('id', p."id", 'nameAr', p."nameAr", 'nameEn', p."nameEn") from public."ExamFolder" p where p."id" = f."parentId"),
+    'folders', (select coalesce(jsonb_agg(jsonb_build_object(
+        'id', c."id", 'nameAr', c."nameAr", 'nameEn', c."nameEn", 'status', c."status",
+        'count', (select count(*) from public."Exam" x where x."folderId" = c."id"
+                    and (v_access in ('ADMIN', 'INSTRUCTOR') or x."status" = 'PUBLISHED')))
+        order by c."sortOrder", c."createdAt", c."id"), '[]'::jsonb)
+      from public."ExamFolder" c
+      where c."parentId" = f."id" and (v_access in ('ADMIN', 'INSTRUCTOR') or c."status" = 'ACTIVE')),
     'canEdit', public.exam_can_edit_exams(p_folder),
     'canApprove', public.exam_can('exams', 'publish'),
     'exams', (select coalesce(jsonb_agg(jsonb_build_object(

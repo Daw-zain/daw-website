@@ -125,6 +125,7 @@ export function CourseFolders({ locale, labels, programId, canSeePeople }: { loc
                 <div className="mt-auto flex items-center justify-between gap-3 pt-2">
                   <span className="text-sm text-slate">
                     <span className="text-lg font-bold text-navy">{f.count}</span> {labels.builder.exams}
+                    {!!f.folders && <> · <span className="text-lg font-bold text-navy">{f.folders}</span> {labels.builder.subFolders}</>}
                   </span>
                   <Link href={`/${locale}/exams/folder?id=${encodeURIComponent(f.id)}`} className="btn btn-primary btn-sm">
                     {labels.builder.folderOpen}

@@ -90,7 +90,9 @@ export type FolderExamSummary = {
   questionCount: number;
   updatedAt: string;
 };
-export type FolderExams = { folder: { id: string; kind: string; nameAr: string; nameEn: string; programId: string }; canEdit: boolean; canApprove: boolean; exams: FolderExamSummary[] };
+/** a folder: its sub-folders (one level), the folder it sits in, and its own exams */
+export type SubFolder = { id: string; nameAr: string; nameEn: string; status: string; count: number };
+export type FolderExams = { folder: { id: string; kind: string; nameAr: string; nameEn: string; programId: string }; parent?: { id: string; nameAr: string; nameEn: string } | null; folders?: SubFolder[]; canEdit: boolean; canApprove: boolean; exams: FolderExamSummary[] };
 
 export function blankExam(folderId: string, kind?: string): ExamFull {
   const sim = kind === "EXAM_SIMULATIONS";
